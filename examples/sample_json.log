@@ -1,0 +1,10 @@
+{"timestamp": "2026-01-31T10:15:32.123Z", "level": "INFO", "message": "Application started successfully", "host": "web-server-01", "service": "api"}
+{"timestamp": "2026-01-31T10:15:33.456Z", "level": "INFO", "message": "Database connection established", "host": "web-server-01", "service": "api", "db": "postgres"}
+{"timestamp": "2026-01-31T10:15:34.789Z", "level": "WARNING", "message": "Slow query detected: 2.3s for user lookup", "host": "web-server-01", "query_time": 2.3}
+{"timestamp": "2026-01-31T10:15:35.012Z", "level": "ERROR", "message": "Failed to process payment", "host": "web-server-01", "error_code": "PAY_001", "user_id": 12345}
+{"timestamp": "2026-01-31T10:15:36.345Z", "level": "INFO", "message": "User login successful", "host": "web-server-01", "user_id": 67890}
+{"timestamp": "2026-01-31T10:15:37.678Z", "level": "ERROR", "message": "Connection timeout to external service", "host": "web-server-01", "service": "payment-gateway", "timeout": 30}
+{"timestamp": "2026-01-31T10:15:38.901Z", "level": "DEBUG", "message": "Cache hit for product catalog", "host": "web-server-01", "cache_key": "products:all"}
+{"timestamp": "2026-01-31T10:15:39.234Z", "level": "CRITICAL", "message": "Out of memory error", "host": "web-server-02", "available_mb": 12, "service": "worker"}
+{"timestamp": "2026-01-31T10:15:40.567Z", "level": "INFO", "message": "Health check passed", "host": "web-server-01"}
+{"timestamp": "2026-01-31T10:15:41.890Z", "level": "WARNING", "message": "Rate limit approaching for IP 192.168.1.100", "host": "web-server-01", "requests_remaining": 10}
