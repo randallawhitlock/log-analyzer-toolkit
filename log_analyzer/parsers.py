@@ -423,6 +423,7 @@ class SyslogParser(BaseParser):
         r'(?P<appname>\S+)\s+'            # App name
         r'(?P<procid>\S+)\s+'             # Process ID
         r'(?P<msgid>\S+)\s+'              # Message ID
+        r'(?P<structured_data>-|(?:\[.+?\])+)\s+'  # Structured Data
         r'(?P<message>.*)$'               # Message
     )
     
@@ -507,5 +508,6 @@ class SyslogParser(BaseParser):
                 'appname': data.get('appname'),
                 'procid': data.get('procid'),
                 'msgid': data.get('msgid'),
+                'structured_data': data.get('structured_data'),
             }
         )
