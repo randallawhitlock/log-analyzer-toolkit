@@ -9,6 +9,7 @@ from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from sqlalchemy.orm import Session
 
 from log_analyzer.analyzer import AVAILABLE_PARSERS
+from log_analyzer.ai_providers.base import ProviderNotAvailableError
 from backend.db.database import get_db
 from backend.db import crud
 from backend.api import schemas
@@ -166,6 +167,11 @@ def run_triage(
 
     except ValueError as e:
         raise HTTPException(status_code=404, detail=str(e))
+    except ProviderNotAvailableError as e:
+        raise HTTPException(
+            status_code=503, 
+            detail=f"AI Service Unavailable: {str(e)}. Please configure API keys or start Ollama."
+        )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Triage failed: {str(e)}")
 
