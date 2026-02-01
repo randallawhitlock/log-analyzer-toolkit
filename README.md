@@ -124,13 +124,53 @@ for issue in diagnosis.issues:
 
 ## 🤝 Contributing
 
-Contributions are welcome! Please feel free to submit a Pull Request.
+We welcome contributions to the Log Analyzer Toolkit! Whether it's bug fixes, new parsers, or AI enhancements, here's how to get started.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
+### Development Setup
+
+1.  **Fork and Clone**
+    ```bash
+    git clone https://github.com/your-username/log-analyzer-toolkit.git
+    cd log-analyzer-toolkit
+    ```
+
+2.  **Install Safe Dependencies**
+    We recommend using a virtual environment:
+    ```bash
+    python -m venv venv
+    source venv/bin/activate  # or venv\Scripts\activate on Windows
+    pip install -e ".[dev]"
+    ```
+
+3.  **Run Tests**
+    Ensure everything is working before you start:
+    ```bash
+    pytest
+    ```
+
+### Contribution Workflow
+
+1.  **Create a Branch**: Use a descriptive name (e.g., `feature/custom-parser` or `fix/syslog-regex`).
+2.  **Make Changes**: Write clean, documented code.
+3.  **Add Tests**: New features must include unit tests. Fixes must include regression tests.
+    - Run `pytest` to ensure all 60+ tests pass.
+4.  **Linting**: Ensure your code follows Python best practices (PEP 8).
+5.  **Submit PR**: Open a Pull Request against the `main` branch.
+
+### Code Style Guide
+
+- **Type Hints**: Use type hints for all function arguments and return values.
+- **Docstrings**: Include clear docstrings for all modules, classes, and methods.
+- **Dataclasses**: Use `@dataclass` for data structures.
+- **Modularity**: Keep parsers in `parsers.py`, analytics in `analyzer.py`, etc.
+
+### Reporting Issues
+
+Found a bug? Open an issue with:
+1.  Command run
+2.  Log sample (anonymized)
+3.  Expected vs actual output
+4.  Error traceback (if any)
 
 ## 📄 License
 
