@@ -69,3 +69,65 @@ class TestMemorySafety:
         # Limit read should fail
         with pytest.raises(ValueError, match="exceeds maximum line limit"):
             reader.read_all(max_lines=10)
+
+
+class TestPIIRedaction:
+    """Test PII redaction in AI providers."""
+    
+    def test_redact_ip_addresses(self):
+        """Test that IPv4 addresses are redacted."""
+        from log_analyzer.ai_providers.base import AIProvider
+        
+        # Create a concrete implementation for testing
+        class MockProvider(AIProvider):
+            def analyze(self, prompt, system_prompt=None): return None
+            def is_available(self): return True
+            def get_model(self): return "mock"
+            
+        provider = MockProvider()
+        
+        log = "Connection from 192.168.1.100 failed. Retry from 10.0.0.5."
+        redacted = provider.sanitize_log_content(log)
+        
+        assert "192.168.1.100" not in redacted
+        assert "10.0.0.5" not in redacted
+        assert "[IP_REDACTED]" in redacted
+        # Using string matching rather than exact equality to be resilient to exact substitution order
+        assert "Connection from [IP_REDACTED] failed. Retry from [IP_REDACTED]." == redacted
+
+    def test_redact_email_addresses(self):
+        """Test that email addresses are redacted."""
+        from log_analyzer.ai_providers.base import AIProvider
+        
+        class MockProvider(AIProvider):
+            def analyze(self, prompt, system_prompt=None): return None
+            def is_available(self): return True
+            def get_model(self): return "mock"
+            
+        provider = MockProvider()
+        
+        log = "User admin@example.com login failed. Contact support@company.org."
+        redacted = provider.sanitize_log_content(log)
+        
+        assert "admin@example.com" not in redacted
+        assert "support@company.org" not in redacted
+        assert "[EMAIL_REDACTED]" in redacted
+        assert "User [EMAIL_REDACTED] login failed. Contact [EMAIL_REDACTED]." == redacted
+
+    def test_mixed_pii_content(self):
+        """Test redaction of mixed PII content."""
+        from log_analyzer.ai_providers.base import AIProvider
+        
+        class MockProvider(AIProvider):
+            def analyze(self, prompt, system_prompt=None): return None
+            def is_available(self): return True
+            def get_model(self): return "mock"
+            
+        provider = MockProvider()
+        
+        log = "Failed login: user=john.doe@test.com ip=203.0.113.1 time=12:00"
+        redacted = provider.sanitize_log_content(log)
+        
+        assert "john.doe@test.com" not in redacted
+        assert "203.0.113.1" not in redacted
+        assert redacted == "Failed login: user=[EMAIL_REDACTED] ip=[IP_REDACTED] time=12:00"
