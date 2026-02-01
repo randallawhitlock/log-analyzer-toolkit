@@ -257,6 +257,25 @@ class AIProvider(ABC):
         if not content:
             return ""
         
+        # Redact PII (Emails and IPv4)
+        # Note: These are basic patterns and might strictly valid but rare formats
+        
+        # Email: basic alphanumeric + @ + domain
+        import re
+        content = re.sub(
+            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', 
+            '[EMAIL_REDACTED]', 
+            content
+        )
+        
+        # IPv4: 4 groups of digits separated by dots
+        # Exclude local addresses might be desirable, but for safety we mask all
+        content = re.sub(
+            r'\b(?:\d{1,3}\.){3}\d{1,3}\b', 
+            '[IP_REDACTED]', 
+            content
+        )
+        
         # Truncate if too long
         if len(content) > max_length:
             content = content[:max_length] + f"\n\n[... truncated, {len(content) - max_length} more characters ...]"
