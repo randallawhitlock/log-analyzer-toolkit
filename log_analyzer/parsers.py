@@ -18,6 +18,7 @@ __all__ = [
     "ApacheAccessParser",
     "ApacheErrorParser",
     "NginxAccessParser",
+    "NginxParser",
     "JSONLogParser",
     "SyslogParser",
     "AndroidParser",
@@ -27,6 +28,9 @@ __all__ = [
     "WindowsEventParser",
     "ProxifierParser",
     "HPCParser",
+    "HealthAppParser",
+    "OpenStackParser",
+    "SquidParser",
     "UniversalFallbackParser",
     "CustomParserRegistry",
 ]
@@ -921,7 +925,7 @@ class ProxifierParser(BaseParser):
     
     PATTERN = re.compile(
         r'^\[(?P<date>\d+\.\d+)\s+(?P<time>\d{2}:\d{2}:\d{2})\]\s+'
-        r'(?P<process>\S+)\s+-\s+'
+        r'(?P<process>\S+)(?:\s+\*\d+)?\s+-\s+'
         r'(?P<message>.*)$'
     )
     
@@ -978,7 +982,8 @@ class HPCParser(BaseParser):
     
     def can_parse(self, line: str) -> bool:
         """Check if line matches HPC format."""
-        return bool(re.match(r'^\d+\s+node-\d+\s+\w+\.\w+', line))
+        # Matches: ID node/gige category.subcategory timestamp flag message
+        return bool(re.match(r'^\d+\s+(?:node-\d+|gige\d+)\s+\w+(?:\.\w+)?', line))
     
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an HPC log line."""
@@ -1006,6 +1011,252 @@ class HPCParser(BaseParser):
                 'id': data.get('id'),
                 'category': data.get('category'),
                 'event': data.get('event'),
+            }
+        )
+
+
+class HealthAppParser(BaseParser):
+    """
+    Parser for HealthApp logs (Android health application).
+    
+    Format: YYYYMMDD-HH:MM:SS:mmm|Component|ID|Message
+    Example: 20171223-22:15:29:606|Step_LSC|30002312|onStandStepChanged 3579
+    """
+    
+    name = "healthapp"
+    
+    PATTERN = re.compile(
+        r'^(?P<timestamp>\d{8}-\d{1,2}:\d{1,2}:\d{1,2}:\d{1,3})\|'
+        r'(?P<component>[^|]+)\|'
+        r'(?P<id>\d+)\|'
+        r'(?P<message>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches HealthApp format."""
+        return bool(re.match(r'^\d{8}-\d{1,2}:\d{1,2}:\d{1,2}:\d{1,3}\|', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse a HealthApp log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        
+        # Parse timestamp: 20171223-22:15:29:606
+        timestamp = None
+        try:
+            ts_str = data['timestamp']
+            timestamp = datetime.strptime(ts_str, "%Y%m%d-%H:%M:%S:%f")
+        except (ValueError, KeyError):
+            pass
+        
+        return LogEntry(
+            raw=line,
+            timestamp=timestamp,
+            level='INFO',
+            message=data.get('message', ''),
+            source=data.get('component'),
+            metadata={
+                'component': data.get('component'),
+                'id': data.get('id'),
+            }
+        )
+
+
+class OpenStackParser(BaseParser):
+    """
+    Parser for OpenStack logs (Nova, Neutron, Cinder, etc.).
+    
+    Format: filename timestamp PID LEVEL component [req-UUID ...] IP "REQUEST" status: N len: N time: N
+    Example: nova-api.log 2017-05-16 00:00:00.008 25746 INFO nova.osapi_compute.wsgi.server [req-xxx] 10.11.10.1 "GET /v2/..." status: 200
+    """
+    
+    name = "openstack"
+    
+    PATTERN = re.compile(
+        r'^(?P<filename>\S+)\s+'
+        r'(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)\s+'
+        r'(?P<pid>\d+)\s+'
+        r'(?P<level>\w+)\s+'
+        r'(?P<component>\S+)\s+'
+        r'\[(?P<request_id>[^\]]+)\]\s+'
+        r'(?P<message>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches OpenStack format."""
+        # Look for the characteristic [req-uuid] pattern
+        return bool(re.match(r'^\S+\s+\d{4}-\d{2}-\d{2}.*\[req-', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse an OpenStack log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        
+        # Parse timestamp
+        timestamp = None
+        try:
+            ts_str = data['timestamp']
+            timestamp = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S.%f")
+        except (ValueError, KeyError):
+            pass
+        
+        level = data.get('level', 'INFO').upper()
+        
+        return LogEntry(
+            raw=line,
+            timestamp=timestamp,
+            level=level,
+            message=data.get('message', ''),
+            source=data.get('component'),
+            metadata={
+                'filename': data.get('filename'),
+                'pid': data.get('pid'),
+                'request_id': data.get('request_id'),
+            }
+        )
+
+
+class SquidParser(BaseParser):
+    """
+    Parser for Squid proxy access logs.
+    
+    Format: timestamp duration client_ip result/status_code bytes method URL user hierarchy/server content_type
+    Example: 1157689312.049   5006 10.105.21.199 TCP_MISS/200 19763 CONNECT login.yahoo.com:443 user DIRECT/ip -
+    """
+    
+    name = "squid"
+    
+    PATTERN = re.compile(
+        r'^(?P<timestamp>\d+(?:\.\d+)?)\s+'
+        r'(?P<duration>-?\d+)\s+'
+        r'(?P<client_ip>\S+)\s+'
+        r'(?P<result_code>\S+)\s+'
+        r'(?P<bytes>-?\d+)\s+'
+        r'(?P<method>\w+)\s+'
+        r'(?P<url>\S+)\s+'
+        r'(?P<user>\S+)\s+'
+        r'(?P<hierarchy>\S+)\s*'
+        r'(?P<content_type>\S*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Squid format."""
+        # Squid lines start with epoch timestamp (10 digits, optional decimal) followed by duration
+        return bool(re.match(r'^\d{10}(?:\.\d+)?\s+-?\d+\s+\S+\s+\w+[_/]', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse a Squid log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        
+        # Parse epoch timestamp
+        timestamp = None
+        try:
+            epoch = float(data['timestamp'])
+            timestamp = datetime.fromtimestamp(epoch)
+        except (ValueError, KeyError, OSError):
+            pass
+        
+        # Infer level from result code
+        result = data.get('result_code', '')
+        level = 'INFO'
+        if '/5' in result or 'ERR' in result:
+            level = 'ERROR'
+        elif '/4' in result or 'DENIED' in result:
+            level = 'WARNING'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=timestamp,
+            level=level,
+            message=f"{data.get('method', '')} {data.get('url', '')}",
+            source=data.get('client_ip'),
+            metadata={
+                'duration_ms': data.get('duration'),
+                'bytes': data.get('bytes'),
+                'result_code': data.get('result_code'),
+                'user': data.get('user'),
+                'hierarchy': data.get('hierarchy'),
+            }
+        )
+
+
+class NginxParser(BaseParser):
+    """
+    Parser for nginx access logs (handles both standard and extended formats).
+    
+    This parser specifically handles nginx logs that may not match the Apache combined format,
+    including logs with additional fields like request time and upstream response time.
+    """
+    
+    name = "nginx"
+    
+    # Standard nginx combined format with optional extensions
+    PATTERN = re.compile(
+        r'^(?P<client_ip>\S+)\s+'
+        r'-\s+'
+        r'(?P<user>\S+)\s+'
+        r'\[(?P<timestamp>[^\]]+)\]\s+'
+        r'"(?P<request>[^"]*)"\s+'
+        r'(?P<status>\d+)\s+'
+        r'(?P<bytes>\d+)\s+'
+        r'"(?P<referer>[^"]*)"\s+'
+        r'"(?P<user_agent>[^"]*)"'
+        r'(?:\s+(?P<extra>.*))?$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches nginx format."""
+        return bool(self.PATTERN.match(line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse a nginx log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        
+        # Parse timestamp
+        timestamp = None
+        try:
+            ts_str = data['timestamp']
+            timestamp = datetime.strptime(ts_str, "%d/%b/%Y:%H:%M:%S %z")
+        except (ValueError, KeyError):
+            try:
+                timestamp = datetime.strptime(ts_str.split()[0], "%d/%b/%Y:%H:%M:%S")
+            except (ValueError, KeyError):
+                pass
+        
+        # Infer level from status code
+        status = int(data.get('status', 200))
+        if status >= 500:
+            level = 'ERROR'
+        elif status >= 400:
+            level = 'WARNING'
+        else:
+            level = 'INFO'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=timestamp,
+            level=level,
+            message=data.get('request', ''),
+            source=data.get('client_ip'),
+            metadata={
+                'status': status,
+                'bytes': data.get('bytes'),
+                'user_agent': data.get('user_agent'),
+                'referer': data.get('referer'),
             }
         )
 

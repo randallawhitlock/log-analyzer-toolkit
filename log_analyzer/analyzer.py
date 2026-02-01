@@ -16,6 +16,7 @@ from .parsers import (
     ApacheAccessParser,
     ApacheErrorParser,
     NginxAccessParser,
+    NginxParser,
     JSONLogParser,
     SyslogParser,
     AndroidParser,
@@ -25,6 +26,9 @@ from .parsers import (
     WindowsEventParser,
     ProxifierParser,
     HPCParser,
+    HealthAppParser,
+    OpenStackParser,
+    SquidParser,
     UniversalFallbackParser,
     CustomParserRegistry,
 )
@@ -36,6 +40,7 @@ AVAILABLE_PARSERS = [
     ApacheAccessParser(),
     ApacheErrorParser(),
     NginxAccessParser(),
+    NginxParser(),
     JSONLogParser(),
     SyslogParser(),
     AndroidParser(),
@@ -45,6 +50,9 @@ AVAILABLE_PARSERS = [
     WindowsEventParser(),
     ProxifierParser(),
     HPCParser(),
+    HealthAppParser(),
+    OpenStackParser(),
+    SquidParser(),
 ]
 
 # Full parser list including universal fallback (for use when no format detected)
