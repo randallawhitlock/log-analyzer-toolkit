@@ -414,6 +414,14 @@ class SyslogParser(BaseParser):
         r'(?P<message>.*)$'               # Message
     )
     
+    # BSD syslog pattern (common format without priority, used by many log analyzers)
+    PATTERN_BSD = re.compile(
+        r'^(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+'  # Timestamp
+        r'(?P<hostname>\S+)\s+'           # Hostname
+        r'(?P<tag>\S+?)(?:\[(?P<pid>\d+)\])?:\s*'  # Tag and optional PID
+        r'(?P<message>.*)$'               # Message
+    )
+    
     # RFC 5424 pattern
     PATTERN_5424 = re.compile(
         r'^<(?P<priority>\d+)>'           # Priority
@@ -441,7 +449,13 @@ class SyslogParser(BaseParser):
     
     def can_parse(self, line: str) -> bool:
         """Check if line matches syslog format."""
-        return line.startswith('<') and '>' in line[:5]
+        # Check for RFC format with priority
+        if line.startswith('<') and '>' in line[:5]:
+            return True
+        # Check for BSD format (starts with month abbreviation)
+        if len(line) > 15 and line[:3] in ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'):
+            return True
+        return False
     
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a syslog line."""
@@ -455,7 +469,39 @@ class SyslogParser(BaseParser):
         if match:
             return self._parse_3164(match, line)
         
+        # Try BSD syslog (no priority field)
+        match = self.PATTERN_BSD.match(line)
+        if match:
+            return self._parse_bsd(match, line)
+        
         return None
+    
+    def _parse_bsd(self, match: re.Match, line: str) -> LogEntry:
+        """Parse BSD-style syslog (without priority)."""
+        data = match.groupdict()
+        
+        # Infer severity from message keywords
+        message = data.get('message', '')
+        level = 'INFO'
+        msg_lower = message.lower()
+        if 'error' in msg_lower or 'fail' in msg_lower or 'denied' in msg_lower:
+            level = 'ERROR'
+        elif 'warn' in msg_lower:
+            level = 'WARNING'
+        elif 'debug' in msg_lower:
+            level = 'DEBUG'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,  # BSD timestamps need current year
+            level=level,
+            message=message,
+            source=data.get('hostname'),
+            metadata={
+                'tag': data.get('tag'),
+                'pid': data.get('pid'),
+            }
+        )
     
     def _parse_3164(self, match: re.Match, line: str) -> LogEntry:
         """Parse RFC 3164 syslog."""
