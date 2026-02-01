@@ -7,12 +7,25 @@
 
     <!-- Filters -->
     <div class="filters">
-      <select v-model="formatFilter" @change="loadAnalyses" class="filter-select">
-        <option value="">All Formats</option>
-        <option v-for="format in availableFormats" :key="format" :value="format">
-          {{ format }}
-        </option>
-      </select>
+      <div class="filter-group">
+        <input 
+          v-model="searchQuery" 
+          @input="debouncedSearch"
+          type="text" 
+          placeholder="🔍 Search filenames..." 
+          class="search-input"
+        />
+        <select v-model="formatFilter" @change="loadAnalyses" class="filter-select">
+          <option value="">All Formats</option>
+          <option v-for="format in availableFormats" :key="format" :value="format">
+            {{ format }}
+          </option>
+        </select>
+        <label class="error-filter">
+          <input type="checkbox" v-model="showErrorsOnly" @change="loadAnalyses" />
+          <span>Errors only</span>
+        </label>
+      </div>
       <router-link to="/upload" class="upload-btn">+ Upload New</router-link>
     </div>
 
@@ -109,11 +122,22 @@ import { useApi } from '../composables/useApi'
 const { getAnalyses, deleteAnalysis, loading, error } = useApi()
 
 const analyses = ref([])
+const allAnalyses = ref([]) // Store all analyses for client-side filtering
 const total = ref(0)
 const currentPage = ref(1)
 const perPage = 20
 const formatFilter = ref('')
+const searchQuery = ref('')
+const showErrorsOnly = ref(false)
 const availableFormats = ref([])
+
+let searchTimeout = null
+const debouncedSearch = () => {
+  clearTimeout(searchTimeout)
+  searchTimeout = setTimeout(() => {
+    filterAnalyses()
+  }, 300)
+}
 
 const totalPages = computed(() => Math.ceil(total.value / perPage))
 
@@ -137,22 +161,47 @@ const formatDate = (dateStr) => {
 const loadAnalyses = async () => {
   try {
     const data = await getAnalyses({
-      skip: (currentPage.value - 1) * perPage,
-      limit: perPage,
-      format: formatFilter.value || null
+      skip: 0,
+      limit: 200 // Load more for client-side filtering
     })
-    analyses.value = data.analyses
-    total.value = data.total
+    allAnalyses.value = data.analyses
     
     // Extract unique formats for filter
     if (availableFormats.value.length === 0) {
-      const allData = await getAnalyses({ limit: 100 })
-      const formats = new Set(allData.analyses.map(a => a.detected_format))
+      const formats = new Set(data.analyses.map(a => a.detected_format))
       availableFormats.value = Array.from(formats).sort()
     }
+    
+    filterAnalyses()
   } catch (err) {
     console.error('Failed to load analyses:', err)
   }
+}
+
+const filterAnalyses = () => {
+  let filtered = [...allAnalyses.value]
+  
+  // Filter by search query
+  if (searchQuery.value.trim()) {
+    const query = searchQuery.value.toLowerCase()
+    filtered = filtered.filter(a => a.filename.toLowerCase().includes(query))
+  }
+  
+  // Filter by format
+  if (formatFilter.value) {
+    filtered = filtered.filter(a => a.detected_format === formatFilter.value)
+  }
+  
+  // Filter by errors only
+  if (showErrorsOnly.value) {
+    filtered = filtered.filter(a => a.error_rate > 0)
+  }
+  
+  total.value = filtered.length
+  
+  // Apply pagination
+  const start = (currentPage.value - 1) * perPage
+  analyses.value = filtered.slice(start, start + perPage)
 }
 
 const goToPage = (page) => {
@@ -209,6 +258,49 @@ onMounted(() => {
   justify-content: space-between;
   align-items: center;
   margin-bottom: 24px;
+  flex-wrap: wrap;
+  gap: 12px;
+}
+
+.filter-group {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-wrap: wrap;
+}
+
+.search-input {
+  padding: 10px 16px;
+  background: var(--color-bg-secondary, #1a1a2e);
+  border: 1px solid var(--color-border, #3a3a55);
+  border-radius: 8px;
+  color: var(--color-text, #fff);
+  font-size: 14px;
+  min-width: 200px;
+}
+
+.search-input:focus {
+  outline: none;
+  border-color: var(--color-primary, #646cff);
+}
+
+.search-input::placeholder {
+  color: var(--color-text-dim, #666);
+}
+
+.error-filter {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  color: var(--color-text-muted, #888);
+  font-size: 14px;
+  cursor: pointer;
+}
+
+.error-filter input[type="checkbox"] {
+  width: 16px;
+  height: 16px;
+  accent-color: var(--color-primary, #646cff);
 }
 
 .filter-select {

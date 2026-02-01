@@ -10,6 +10,7 @@
         <router-link to="/" class="nav-link">Home</router-link>
         <router-link to="/analyses" class="nav-link">Analyses</router-link>
         <router-link to="/upload" class="nav-link upload-link">+ Upload</router-link>
+        <ThemeToggle />
       </div>
     </nav>
 
@@ -24,7 +25,7 @@
 </template>
 
 <script setup>
-// App setup is minimal - router handles view changes
+import ThemeToggle from './components/ThemeToggle.vue'
 </script>
 
 <style scoped>
