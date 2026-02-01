@@ -18,6 +18,13 @@ from .parsers import (
     NginxAccessParser,
     JSONLogParser,
     SyslogParser,
+    AndroidParser,
+    JavaLogParser,
+    HDFSParser,
+    SupercomputerParser,
+    WindowsEventParser,
+    ProxifierParser,
+    HPCParser,
 )
 from .reader import LogReader
 
@@ -29,6 +36,13 @@ AVAILABLE_PARSERS = [
     NginxAccessParser(),
     JSONLogParser(),
     SyslogParser(),
+    AndroidParser(),
+    JavaLogParser(),
+    HDFSParser(),
+    SupercomputerParser(),
+    WindowsEventParser(),
+    ProxifierParser(),
+    HPCParser(),
 ]
 
 

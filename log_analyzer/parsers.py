@@ -143,11 +143,13 @@ class ApacheErrorParser(BaseParser):
     """
     Parser for Apache Error Log Format.
     
-    Example: [Sat Oct 10 13:55:36.123456 2023] [core:error] [pid 1234] [client 192.168.1.1:12345] Error message
+    Modern: [Sat Oct 10 13:55:36.123456 2023] [core:error] [pid 1234] [client 192.168.1.1:12345] Error message
+    Legacy: [Sun Dec 04 04:47:44 2005] [error] message
     """
     
     name = "apache_error"
     
+    # Modern format with module:level
     PATTERN = re.compile(
         r'^\[(?P<timestamp>[^\]]+)\]\s+'     # Timestamp
         r'\[(?P<module>\w+):(?P<level>\w+)\]\s+'  # Module:Level
@@ -156,43 +158,64 @@ class ApacheErrorParser(BaseParser):
         r'(?P<message>.+)$'                   # Message
     )
     
+    # Legacy format with just level (no module)
+    PATTERN_LEGACY = re.compile(
+        r'^\[(?P<timestamp>[^\]]+)\]\s+'     # Timestamp
+        r'\[(?P<level>\w+)\]\s+'             # Level only
+        r'(?P<message>.+)$'                   # Message
+    )
+    
+    LEVEL_MAP = {
+        'emerg': 'CRITICAL',
+        'alert': 'CRITICAL', 
+        'crit': 'CRITICAL',
+        'error': 'ERROR',
+        'warn': 'WARNING',
+        'notice': 'INFO',
+        'info': 'INFO',
+        'debug': 'DEBUG',
+    }
+    
     def can_parse(self, line: str) -> bool:
         """Check if line matches Apache error log format."""
-        return bool(self.PATTERN.match(line))
+        return bool(self.PATTERN.match(line) or self.PATTERN_LEGACY.match(line))
     
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an Apache error log line."""
+        # Try modern format first
         match = self.PATTERN.match(line)
-        if not match:
-            return None
+        if match:
+            data = match.groupdict()
+            level = self.LEVEL_MAP.get(data.get('level', '').lower(), 'INFO')
+            
+            return LogEntry(
+                raw=line,
+                timestamp=None,
+                level=level,
+                message=data.get('message', ''),
+                source=data.get('client'),
+                metadata={
+                    'module': data.get('module'),
+                    'pid': data.get('pid'),
+                }
+            )
         
-        data = match.groupdict()
+        # Try legacy format
+        match = self.PATTERN_LEGACY.match(line)
+        if match:
+            data = match.groupdict()
+            level = self.LEVEL_MAP.get(data.get('level', '').lower(), 'INFO')
+            
+            return LogEntry(
+                raw=line,
+                timestamp=None,
+                level=level,
+                message=data.get('message', ''),
+                source=None,
+                metadata={}
+            )
         
-        # Map Apache error levels to standard levels
-        level_map = {
-            'emerg': 'CRITICAL',
-            'alert': 'CRITICAL', 
-            'crit': 'CRITICAL',
-            'error': 'ERROR',
-            'warn': 'WARNING',
-            'notice': 'INFO',
-            'info': 'INFO',
-            'debug': 'DEBUG',
-        }
-        
-        level = level_map.get(data.get('level', '').lower(), 'INFO')
-        
-        return LogEntry(
-            raw=line,
-            timestamp=None,  # Apache error timestamps vary, handle later
-            level=level,
-            message=data.get('message', ''),
-            source=data.get('client'),
-            metadata={
-                'module': data.get('module'),
-                'pid': data.get('pid'),
-            }
-        )
+        return None
 
 
 class NginxAccessParser(BaseParser):
@@ -557,3 +580,412 @@ class SyslogParser(BaseParser):
                 'structured_data': data.get('structured_data'),
             }
         )
+
+
+class AndroidParser(BaseParser):
+    """
+    Parser for Android Logcat format.
+    
+    Example: 03-17 16:13:38.811  1702  2395 D WindowManager: message
+    """
+    
+    name = "android"
+    
+    PATTERN = re.compile(
+        r'^(?P<month>\d{2})-(?P<day>\d{2})\s+'
+        r'(?P<time>\d{2}:\d{2}:\d{2}\.\d{3})\s+'
+        r'(?P<pid>\d+)\s+(?P<tid>\d+)\s+'
+        r'(?P<level>[VDIWEF])\s+'
+        r'(?P<tag>\S+?):\s*'
+        r'(?P<message>.*)$'
+    )
+    
+    LEVEL_MAP = {
+        'V': 'DEBUG',
+        'D': 'DEBUG',
+        'I': 'INFO',
+        'W': 'WARNING',
+        'E': 'ERROR',
+        'F': 'CRITICAL',
+    }
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Android logcat format."""
+        return bool(re.match(r'^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse an Android logcat line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        level = self.LEVEL_MAP.get(data.get('level', 'I'), 'INFO')
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,  # Would need year for full timestamp
+            level=level,
+            message=data.get('message', ''),
+            source=data.get('tag'),
+            metadata={
+                'pid': data.get('pid'),
+                'tid': data.get('tid'),
+                'tag': data.get('tag'),
+            }
+        )
+
+
+class JavaLogParser(BaseParser):
+    """
+    Parser for Java log4j style logs (Hadoop, Spark, Zookeeper).
+    
+    Examples:
+    - 2015-10-18 18:01:47,978 INFO [main] org.apache.hadoop...: msg
+    - 17/06/09 20:10:40 INFO executor.CoarseGrainedExecutorBackend: msg
+    - 2015-07-29 17:41:44,747 - INFO  [QuorumPeer...] - msg
+    """
+    
+    name = "java_log"
+    
+    # Full timestamp format (Hadoop, Zookeeper)
+    PATTERN_FULL = re.compile(
+        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*'
+        r'[-]?\s*'
+        r'(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+'
+        r'(?:\[(?P<thread>[^\]]+)\]\s+)?'
+        r'(?P<class>\S+?):\s*'
+        r'(?P<message>.*)$'
+    )
+    
+    # Short timestamp format (Spark: YY/MM/DD)
+    PATTERN_SHORT = re.compile(
+        r'^(?P<timestamp>\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\s+'
+        r'(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+'
+        r'(?P<class>\S+?):\s*'
+        r'(?P<message>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Java log format."""
+        # Check for full timestamp
+        if re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}', line):
+            return True
+        # Check for short timestamp (Spark)
+        if re.match(r'^\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}', line):
+            return True
+        return False
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse a Java log line."""
+        # Try full format first
+        match = self.PATTERN_FULL.match(line)
+        if match:
+            return self._parse_match(match, line)
+        
+        # Try short format
+        match = self.PATTERN_SHORT.match(line)
+        if match:
+            return self._parse_match(match, line)
+        
+        return None
+    
+    def _parse_match(self, match: re.Match, line: str) -> LogEntry:
+        """Parse matched data into LogEntry."""
+        data = match.groupdict()
+        level = data.get('level', 'INFO').upper()
+        if level == 'WARN':
+            level = 'WARNING'
+        elif level == 'FATAL':
+            level = 'CRITICAL'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,
+            level=level,
+            message=data.get('message', ''),
+            source=data.get('class'),
+            metadata={
+                'thread': data.get('thread'),
+                'class': data.get('class'),
+            }
+        )
+
+
+class HDFSParser(BaseParser):
+    """
+    Parser for HDFS compact log format.
+    
+    Example: 081109 203615 148 INFO dfs.DataNode$PacketResponder: msg
+    """
+    
+    name = "hdfs"
+    
+    PATTERN = re.compile(
+        r'^(?P<date>\d{6})\s+'
+        r'(?P<time>\d{6})\s+'
+        r'(?P<id>\d+)\s+'
+        r'(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+'
+        r'(?P<class>\S+?):\s*'
+        r'(?P<message>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches HDFS format."""
+        return bool(re.match(r'^\d{6}\s+\d{6}\s+\d+\s+(?:INFO|WARN|ERROR|DEBUG)', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse an HDFS log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        level = data.get('level', 'INFO').upper()
+        if level == 'WARN':
+            level = 'WARNING'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,
+            level=level,
+            message=data.get('message', ''),
+            source=data.get('class'),
+            metadata={
+                'id': data.get('id'),
+                'class': data.get('class'),
+            }
+        )
+
+
+class SupercomputerParser(BaseParser):
+    """
+    Parser for supercomputer logs (BGL, Thunderbird).
+    
+    Example: - 1117838570 2005.06.03 R02-M1-N0 2005-06-03-15.42.50 R02 RAS KERNEL INFO msg
+    """
+    
+    name = "supercomputer"
+    
+    # BGL format
+    PATTERN_BGL = re.compile(
+        r'^-\s+'
+        r'(?P<timestamp>\d+)\s+'
+        r'(?P<date>\d{4}\.\d{2}\.\d{2})\s+'
+        r'(?P<node>\S+)\s+'
+        r'(?P<datetime>\S+)\s+'
+        r'(?P<node2>\S+)\s+'
+        r'(?P<type>\S+)\s+'
+        r'(?P<component>\S+)\s+'
+        r'(?P<level>\S+)\s+'
+        r'(?P<message>.*)$'
+    )
+    
+    # Thunderbird format (has syslog-like content after prefix)
+    PATTERN_THUNDER = re.compile(
+        r'^-\s+'
+        r'(?P<timestamp>\d+)\s+'
+        r'(?P<date>\d{4}\.\d{2}\.\d{2})\s+'
+        r'(?P<node>\S+)\s+'
+        r'(?P<syslog_data>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches supercomputer format."""
+        return line.startswith('- ') and re.match(r'^-\s+\d+\s+\d{4}\.\d{2}\.\d{2}', line)
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse a supercomputer log line."""
+        # Try BGL format first
+        match = self.PATTERN_BGL.match(line)
+        if match:
+            data = match.groupdict()
+            level = data.get('level', 'INFO').upper()
+            if level not in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
+                level = 'INFO'
+            
+            return LogEntry(
+                raw=line,
+                timestamp=None,
+                level=level,
+                message=data.get('message', ''),
+                source=data.get('node'),
+                metadata={
+                    'type': data.get('type'),
+                    'component': data.get('component'),
+                }
+            )
+        
+        # Try Thunderbird format
+        match = self.PATTERN_THUNDER.match(line)
+        if match:
+            data = match.groupdict()
+            syslog_data = data.get('syslog_data', '')
+            
+            # Infer level from message
+            level = 'INFO'
+            if 'error' in syslog_data.lower() or 'fail' in syslog_data.lower():
+                level = 'ERROR'
+            elif 'warn' in syslog_data.lower():
+                level = 'WARNING'
+            
+            return LogEntry(
+                raw=line,
+                timestamp=None,
+                level=level,
+                message=syslog_data,
+                source=data.get('node'),
+                metadata={}
+            )
+        
+        return None
+
+
+class WindowsEventParser(BaseParser):
+    """
+    Parser for Windows CBS/CSI logs.
+    
+    Example: 2016-09-28 04:30:30, Info CBS Loaded Servicing Stack...
+    """
+    
+    name = "windows"
+    
+    PATTERN = re.compile(
+        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}),\s*'
+        r'(?P<level>\w+)\s+'
+        r'(?P<component>\w+)\s+'
+        r'(?P<message>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Windows event format."""
+        return bool(re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2},\s*\w+', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse a Windows event log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        level = data.get('level', 'Info').upper()
+        if level == 'INFO':
+            level = 'INFO'
+        elif level in ('WARN', 'WARNING'):
+            level = 'WARNING'
+        elif level == 'ERROR':
+            level = 'ERROR'
+        else:
+            level = 'INFO'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,
+            level=level,
+            message=data.get('message', ''),
+            source=data.get('component'),
+            metadata={
+                'component': data.get('component'),
+            }
+        )
+
+
+class ProxifierParser(BaseParser):
+    """
+    Parser for Proxifier logs.
+    
+    Example: [10.30 16:49:06] chrome.exe - proxy.cse.cuhk.edu.hk:5070 open through proxy
+    """
+    
+    name = "proxifier"
+    
+    PATTERN = re.compile(
+        r'^\[(?P<date>\d+\.\d+)\s+(?P<time>\d{2}:\d{2}:\d{2})\]\s+'
+        r'(?P<process>\S+)\s+-\s+'
+        r'(?P<message>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Proxifier format."""
+        return line.startswith('[') and bool(re.match(r'^\[\d+\.\d+\s+\d{2}:\d{2}:\d{2}\]', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse a Proxifier log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        message = data.get('message', '')
+        
+        # Infer level from message
+        level = 'INFO'
+        if 'error' in message.lower() or 'fail' in message.lower():
+            level = 'ERROR'
+        elif 'close' in message.lower():
+            level = 'DEBUG'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,
+            level=level,
+            message=message,
+            source=data.get('process'),
+            metadata={
+                'process': data.get('process'),
+            }
+        )
+
+
+class HPCParser(BaseParser):
+    """
+    Parser for HPC (High Performance Computing) logs.
+    
+    Example: 134681 node-246 unix.hw state_change.unavailable 1077804742 1 msg
+    """
+    
+    name = "hpc"
+    
+    PATTERN = re.compile(
+        r'^(?P<id>\d+)\s+'
+        r'(?P<node>\S+)\s+'
+        r'(?P<category>\S+)\s+'
+        r'(?P<event>\S+)\s+'
+        r'(?P<timestamp>\d+)\s+'
+        r'(?P<flag>\d+)\s+'
+        r'(?P<message>.*)$'
+    )
+    
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches HPC format."""
+        return bool(re.match(r'^\d+\s+node-\d+\s+\w+\.\w+', line))
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse an HPC log line."""
+        match = self.PATTERN.match(line)
+        if not match:
+            return None
+        
+        data = match.groupdict()
+        event = data.get('event', '')
+        
+        # Infer level from event name
+        level = 'INFO'
+        if 'unavailable' in event or 'error' in event:
+            level = 'ERROR'
+        elif 'warning' in event:
+            level = 'WARNING'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,
+            level=level,
+            message=data.get('message', ''),
+            source=data.get('node'),
+            metadata={
+                'id': data.get('id'),
+                'category': data.get('category'),
+                'event': data.get('event'),
+            }
+        )
+
