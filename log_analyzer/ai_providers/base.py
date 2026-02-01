@@ -5,11 +5,25 @@ This module defines the abstract interface that all AI providers must implement,
 along with common data structures for AI responses and errors.
 """
 
+import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
 from typing import Optional, Any
+
+
+__all__ = [
+    "AIError",
+    "ProviderNotAvailableError",
+    "RateLimitError",
+    "AuthenticationError",
+    "Severity",
+    "AIResponse",
+    "TriageIssue",
+    "TriageResult",
+    "AIProvider",
+]
 
 
 class AIError(Exception):
@@ -257,11 +271,10 @@ class AIProvider(ABC):
         if not content:
             return ""
         
-        # Redact PII (Emails and IPv4)
-        # Note: These are basic patterns and might strictly valid but rare formats
+        # Redact PII (Emails, IPv4, and IPv6)
+        # Note: These are basic patterns and may not catch all edge cases
         
         # Email: basic alphanumeric + @ + domain
-        import re
         content = re.sub(
             r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', 
             '[EMAIL_REDACTED]', 
@@ -269,9 +282,25 @@ class AIProvider(ABC):
         )
         
         # IPv4: 4 groups of digits separated by dots
-        # Exclude local addresses might be desirable, but for safety we mask all
         content = re.sub(
             r'\b(?:\d{1,3}\.){3}\d{1,3}\b', 
+            '[IP_REDACTED]', 
+            content
+        )
+        
+        # IPv6: Full and compressed formats
+        content = re.sub(
+            r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b',  # Full
+            '[IP_REDACTED]', 
+            content
+        )
+        content = re.sub(
+            r'\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b',  # Compressed end
+            '[IP_REDACTED]', 
+            content
+        )
+        content = re.sub(
+            r'\b::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b',  # Compressed start
             '[IP_REDACTED]', 
             content
         )

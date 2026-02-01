@@ -51,6 +51,14 @@ AVAILABLE_PARSERS = [
 ALL_PARSERS_WITH_FALLBACK = AVAILABLE_PARSERS + [UniversalFallbackParser()]
 
 
+__all__ = [
+    "AVAILABLE_PARSERS",
+    "ALL_PARSERS_WITH_FALLBACK",
+    "AnalysisResult",
+    "LogAnalyzer",
+]
+
+
 @dataclass
 class AnalysisResult:
     """
