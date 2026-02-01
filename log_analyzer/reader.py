@@ -52,14 +52,28 @@ class LogReader:
         except UnicodeDecodeError as e:
             raise ValueError(f"Encoding error at line {line_num}: {e}")
     
-    def read_all(self) -> list[str]:
+    def read_all(self, max_lines: int = 200_000) -> list[str]:
         """
         Read all lines from the log file into memory.
         
+        Args:
+            max_lines: Safety limit to prevent memory exhaustion (default: 200,000)
+            
         Returns:
             List of all lines from the file.
+            
+        Raises:
+            ValueError: If file exceeds max_lines limit
         """
-        return list(self.read_lines())
+        lines = []
+        for i, line in enumerate(self.read_lines()):
+            if i >= max_lines:
+                raise ValueError(
+                    f"File exceeds maximum line limit ({max_lines:,}). "
+                    "Use streaming methods (read_lines) or increase limit."
+                )
+            lines.append(line)
+        return lines
     
     def get_file_info(self) -> dict:
         """
