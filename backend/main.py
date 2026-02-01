@@ -75,6 +75,6 @@ async def root():
     }
 
 
-# Import and include routers (will be added in next step)
-# from backend.api import routes
-# app.include_router(routes.router)
+# Import and include routers
+from backend.api import routes
+app.include_router(routes.router)
