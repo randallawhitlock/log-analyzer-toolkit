@@ -272,6 +272,325 @@ def formats():
     console.print(table)
 
 
+@cli.command()
+@click.argument('filepath', type=click.Path(exists=True))
+@click.option('--provider', '-p',
+              type=click.Choice(['anthropic', 'gemini', 'ollama', 'auto']),
+              default='auto', help='AI provider to use (default: auto-detect)')
+@click.option('--format', '-f', 'log_format',
+              type=click.Choice(['auto', 'apache_access', 'apache_error',
+                                'nginx_access', 'json', 'syslog']),
+              default='auto', help='Log format (default: auto-detect)')
+@click.option('--json', 'output_json', is_flag=True,
+              help='Output results as JSON')
+def triage(filepath: str, provider: str, log_format: str, output_json: bool):
+    """
+    AI-powered intelligent log triage.
+    
+    Analyzes FILEPATH using AI to identify issues, assess severity,
+    and provide actionable recommendations.
+    
+    Examples:
+    
+        log_analyzer triage /var/log/app.log
+        
+        log_analyzer triage --provider ollama /var/log/app.log
+        
+        log_analyzer triage --json /var/log/app.log
+    """
+    import json as json_module
+    
+    from .triage import TriageEngine
+    from .ai_providers import get_provider, ProviderNotAvailableError
+    from .ai_providers.base import Severity
+    
+    console.print()
+    
+    # Get provider name (None means auto-detect)
+    provider_name = None if provider == 'auto' else provider
+    
+    try:
+        with console.status("[bold blue]Initializing AI provider..."):
+            engine = TriageEngine(provider_name=provider_name)
+            ai_provider = engine._get_provider()
+            
+        console.print(f"[dim]Using provider:[/dim] [cyan]{ai_provider.name}[/cyan] "
+                     f"([dim]{ai_provider.get_model()}[/dim])")
+        console.print()
+        
+        with console.status("[bold blue]Analyzing log file..."):
+            # Get parser if specified
+            parser = None
+            if log_format != 'auto':
+                for p in AVAILABLE_PARSERS:
+                    if p.name == log_format:
+                        parser = p.name
+                        break
+            
+            result = engine.triage(filepath, parser=parser)
+        
+    except ProviderNotAvailableError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        console.print()
+        console.print("[yellow]To configure a provider:[/yellow]")
+        console.print("  • Set ANTHROPIC_API_KEY environment variable")
+        console.print("  • Set GOOGLE_API_KEY environment variable")
+        console.print("  • Start Ollama locally: ollama serve")
+        sys.exit(1)
+    except ValueError as e:
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        console.print(f"[red]Error during analysis:[/red] {e}")
+        sys.exit(1)
+    
+    # Output as JSON if requested
+    if output_json:
+        console.print(json_module.dumps(result.to_dict(), indent=2))
+        return
+    
+    # Display rich triage results
+    _display_triage(result, filepath)
+
+
+def _display_triage(result, filepath: str):
+    """Display triage results in a formatted layout."""
+    from .ai_providers.base import Severity
+    
+    # Severity colors
+    severity_colors = {
+        Severity.CRITICAL: 'bold red',
+        Severity.HIGH: 'red',
+        Severity.MEDIUM: 'yellow',
+        Severity.LOW: 'blue',
+        Severity.HEALTHY: 'green',
+    }
+    
+    # Header panel
+    severity_text = Text(result.overall_severity.value, 
+                        style=severity_colors.get(result.overall_severity, 'white'))
+    
+    header_content = (
+        f"[bold]{Path(filepath).name}[/bold]\n"
+        f"Provider: [cyan]{result.provider_used}[/cyan] • "
+        f"Confidence: [cyan]{result.confidence:.0%}[/cyan]"
+    )
+    
+    console.print(Panel(
+        header_content,
+        title=f"🧠 AI Triage Report - {severity_text}",
+        border_style=severity_colors.get(result.overall_severity, 'blue')
+    ))
+    console.print()
+    
+    # Summary
+    console.print(Panel(result.summary, title="📋 Summary", border_style="blue"))
+    console.print()
+    
+    # Statistics
+    stats = Table(title="📊 Statistics", box=box.ROUNDED, show_header=False)
+    stats.add_column("Metric", style="bold")
+    stats.add_column("Value", justify="right")
+    
+    stats.add_row("Lines Analyzed", f"{result.analyzed_lines:,}")
+    stats.add_row("Errors Found", f"{result.error_count:,}")
+    stats.add_row("Warnings Found", f"{result.warning_count:,}")
+    if result.analysis_time_ms:
+        stats.add_row("Analysis Time", f"{result.analysis_time_ms:.0f}ms")
+    
+    console.print(stats)
+    console.print()
+    
+    # Issues
+    if result.issues:
+        console.print(f"[bold]🔍 Identified Issues ({len(result.issues)})[/bold]")
+        console.print()
+        
+        for i, issue in enumerate(result.issues, 1):
+            issue_color = severity_colors.get(issue.severity, 'white')
+            
+            # Issue header
+            console.print(Panel(
+                f"[bold]{issue.title}[/bold]\n\n"
+                f"{issue.description}\n\n"
+                f"[bold]Recommendation:[/bold] {issue.recommendation}",
+                title=f"Issue {i} - {Text(issue.severity.value, style=issue_color)} "
+                      f"(Confidence: {issue.confidence:.0%})",
+                border_style=issue_color,
+            ))
+            console.print()
+    else:
+        console.print("[green]✅ No significant issues identified[/green]")
+        console.print()
+
+
+@cli.command()
+@click.option('--provider', '-p',
+              type=click.Choice(['anthropic', 'gemini', 'ollama']),
+              help='Configure a specific provider')
+@click.option('--show', '-s', is_flag=True,
+              help='Show current configuration')
+def configure(provider: str, show: bool):
+    """
+    Configure AI providers for log triage.
+    
+    Shows the current configuration status or helps set up providers.
+    
+    Examples:
+    
+        log_analyzer configure --show
+        
+        log_analyzer configure --provider anthropic
+    """
+    from .config import get_provider_status, get_config, mask_api_key
+    
+    if show or (not provider):
+        # Show current configuration
+        console.print()
+        console.print(Panel("AI Provider Configuration", border_style="blue"))
+        console.print()
+        
+        status = get_provider_status()
+        
+        table = Table(box=box.ROUNDED)
+        table.add_column("Provider", style="cyan bold")
+        table.add_column("Status")
+        table.add_column("Model")
+        table.add_column("API Key")
+        
+        for name, info in status.items():
+            if info["configured"]:
+                status_icon = "[green]✅ Ready[/green]"
+            else:
+                status_icon = "[yellow]⚠️ Not configured[/yellow]"
+            
+            # For Ollama, show server status
+            if name == "ollama":
+                if info.get("server_available"):
+                    status_icon = "[green]✅ Server running[/green]"
+                else:
+                    status_icon = "[yellow]⚠️ Server not running[/yellow]"
+            
+            table.add_row(
+                name.capitalize(),
+                status_icon,
+                info["model"],
+                info["api_key_display"],
+            )
+        
+        console.print(table)
+        console.print()
+        
+        # Show setup instructions
+        console.print("[bold]Setup Instructions:[/bold]")
+        console.print()
+        console.print("[cyan]Anthropic Claude:[/cyan]")
+        console.print("  export ANTHROPIC_API_KEY='your-api-key'")
+        console.print()
+        console.print("[cyan]Google Gemini:[/cyan]")
+        console.print("  export GOOGLE_API_KEY='your-api-key'")
+        console.print()
+        console.print("[cyan]Ollama (local):[/cyan]")
+        console.print("  ollama serve")
+        console.print("  ollama pull llama3.3")
+        console.print()
+        
+        return
+    
+    # Provider-specific configuration
+    if provider == "anthropic":
+        _configure_anthropic()
+    elif provider == "gemini":
+        _configure_gemini()
+    elif provider == "ollama":
+        _configure_ollama()
+
+
+def _configure_anthropic():
+    """Help configure Anthropic provider."""
+    import os
+    
+    console.print()
+    console.print(Panel("Anthropic Claude Configuration", border_style="blue"))
+    console.print()
+    
+    api_key = os.environ.get("ANTHROPIC_API_KEY")
+    if api_key:
+        from .config import mask_api_key
+        console.print(f"[green]✅ API key found:[/green] {mask_api_key(api_key)}")
+    else:
+        console.print("[yellow]⚠️ ANTHROPIC_API_KEY not set[/yellow]")
+        console.print()
+        console.print("To configure:")
+        console.print("1. Get an API key from https://console.anthropic.com/")
+        console.print("2. Set the environment variable:")
+        console.print("   [cyan]export ANTHROPIC_API_KEY='your-key'[/cyan]")
+    
+    console.print()
+
+
+def _configure_gemini():
+    """Help configure Gemini provider."""
+    import os
+    
+    console.print()
+    console.print(Panel("Google Gemini Configuration", border_style="blue"))
+    console.print()
+    
+    api_key = os.environ.get("GOOGLE_API_KEY")
+    if api_key:
+        from .config import mask_api_key
+        console.print(f"[green]✅ API key found:[/green] {mask_api_key(api_key)}")
+    else:
+        console.print("[yellow]⚠️ GOOGLE_API_KEY not set[/yellow]")
+        console.print()
+        console.print("To configure:")
+        console.print("1. Get an API key from https://aistudio.google.com/apikey")
+        console.print("2. Set the environment variable:")
+        console.print("   [cyan]export GOOGLE_API_KEY='your-key'[/cyan]")
+    
+    console.print()
+
+
+def _configure_ollama():
+    """Help configure Ollama provider."""
+    console.print()
+    console.print(Panel("Ollama Local Configuration", border_style="blue"))
+    console.print()
+    
+    try:
+        from .ai_providers.ollama_provider import OllamaProvider
+        ollama = OllamaProvider()
+        
+        if ollama.is_available():
+            console.print("[green]✅ Ollama server is running[/green]")
+            console.print()
+            
+            # List available models
+            try:
+                models = ollama.list_local_models()
+                if models:
+                    console.print("[bold]Installed models:[/bold]")
+                    for model in models[:10]:
+                        console.print(f"  • {model}")
+                else:
+                    console.print("[yellow]No models installed[/yellow]")
+                    console.print("Run: [cyan]ollama pull llama3.3[/cyan]")
+            except Exception:
+                pass
+        else:
+            console.print("[yellow]⚠️ Ollama server not running[/yellow]")
+            console.print()
+            console.print("To start Ollama:")
+            console.print("1. Install from https://ollama.ai")
+            console.print("2. Start the server: [cyan]ollama serve[/cyan]")
+            console.print("3. Pull a model: [cyan]ollama pull llama3.3[/cyan]")
+    except Exception as e:
+        console.print(f"[red]Error checking Ollama:[/red] {e}")
+    
+    console.print()
+
+
 def main():
     """Entry point for the CLI."""
     cli()
@@ -279,3 +598,4 @@ def main():
 
 if __name__ == '__main__':
     main()
+
