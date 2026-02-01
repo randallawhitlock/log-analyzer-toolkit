@@ -17,227 +17,109 @@ A powerful command-line tool for parsing, analyzing, and troubleshooting log fil
 - 🧠 **AI-Powered Triage** - Intelligent analysis with Claude, Gemini, or Ollama
 - 🔒 **Privacy Options** - Local LLM support via Ollama for sensitive logs
 
-## 🚀 Installation
+## 📚 Comprehensive Implementation Guide
+
+Follow these steps to deploy and use the Log Analyzer Toolkit in your environment.
+
+### Step 1: Installation
+
+Install the package directly from source or via pip.
 
 ```bash
 # Clone the repository
 git clone https://github.com/yourusername/log-analyzer-toolkit.git
 cd log-analyzer-toolkit
 
-# Install dependencies
-pip install -r requirements.txt
-
-# Or install as a package
+# Install standard dependencies
 pip install -e .
+
+# Optional: Install development tools (for running tests)
+pip install -e ".[dev]"
 ```
 
-## 📖 Quick Start
+### Step 2: Configuration & AI Setup
 
-### Analyze a Log File
+To unlock intelligent features, configure your preferred AI provider.
 
+**Option A: Anthropic Claude (Recommended)**
+Best for high-accuracy reasoning and complex root cause analysis.
 ```bash
-# Auto-detect format and analyze
-python -m log_analyzer analyze /var/log/apache2/access.log
-
-# Specify format manually
-python -m log_analyzer analyze --format nginx /var/log/nginx/access.log
+export ANTHROPIC_API_KEY="sk-ant-..."
 ```
 
-### Detect Log Format
-
+**Option B: Google Gemini**
+Fast and cost-effective analysis.
 ```bash
-python -m log_analyzer detect /path/to/logfile.log
+export GOOGLE_API_KEY="AIza..."
 ```
 
-### View Errors Only
-
+**Option C: local Ollama (Privacy-Focused)**
+Run completely offline with local models (requires [Ollama](https://ollama.com/)).
 ```bash
-# Show errors and above
-python -m log_analyzer errors /var/log/app.log
-
-# Show warnings and above, limit to 50 entries
-python -m log_analyzer errors --level WARNING --limit 50 /var/log/app.log
-```
-
-### List Supported Formats
-
-```bash
-python -m log_analyzer formats
-```
-
-## 🧠 AI-Powered Log Triage
-
-The toolkit includes intelligent log analysis using AI providers. Get automated issue detection, severity classification, and actionable recommendations.
-
-### Setup AI Providers
-
-Choose one or more providers:
-
-```bash
-# Option 1: Anthropic Claude (recommended for accuracy)
-export ANTHROPIC_API_KEY="your-api-key"
-
-# Option 2: Google Gemini (fast and capable)
-export GOOGLE_API_KEY="your-api-key"
-
-# Option 3: Ollama (local, privacy-focused)
 ollama serve
 ollama pull llama3.3
 ```
 
-### Run AI Triage
-
-```bash
-# Auto-detect provider and analyze
-python -m log_analyzer triage /var/log/app.log
-
-# Use specific provider
-python -m log_analyzer triage --provider ollama /var/log/app.log
-
-# Get JSON output for automation
-python -m log_analyzer triage --json /var/log/app.log
-```
-
-### Check Provider Status
-
+**Verify Configuration:**
 ```bash
 python -m log_analyzer configure --show
 ```
 
-### Supported AI Providers
+### Step 3: Running Analysis (CLI)
 
-| Provider | Models | Best For |
-|----------|--------|----------|
-| **Anthropic** | Claude Sonnet 4.5, Opus 4.5 | Highest accuracy analysis |
-| **Gemini** | Gemini 3 Pro, Flash | Fast, capable analysis |
-| **Ollama** | llama3.3, mistral, etc. | Privacy, local processing |
+The Command Line Interface (CLI) is the primary way to interact with the toolkit.
 
-## 📊 Example Output
-
-```
-╭──────────────────────── 📊 Log Analysis Report ────────────────────────╮
-│ access.log                                                              │
-│ Format: apache_access                                                   │
-╰─────────────────────────────────────────────────────────────────────────╯
-
-┌──────────────────┬────────────┐
-│ Metric           │      Value │
-├──────────────────┼────────────┤
-│ Total Lines      │     15,234 │
-│ Parsed Lines     │     15,230 │
-│ Parse Success    │      99.9% │
-│ Error Rate       │       2.3% │
-│ Time Span        │   24:00:00 │
-└──────────────────┴────────────┘
-
-┌───────────┬───────┬────────────┐
-│ Level     │ Count │ Percentage │
-├───────────┼───────┼────────────┤
-│ ERROR     │   350 │       2.3% │
-│ WARNING   │   892 │       5.9% │
-│ INFO      │ 13988 │      91.8% │
-└───────────┴───────┴────────────┘
-```
-
-## 📝 Supported Log Formats
-
-| Format | Description | Auto-Detect |
-|--------|-------------|-------------|
-| `apache_access` | Apache Combined Log Format | ✅ |
-| `apache_error` | Apache Error Log | ✅ |
-| `nginx_access` | nginx Access Log | ✅ |
-| `json` | JSON structured logging | ✅ |
-| `syslog` | RFC 3164 & RFC 5424 | ✅ |
-
-## 🧪 Running Tests
-
+**Basic Static Analysis (No AI required)**
+Get statistics, error rates, and traffic sources.
 ```bash
-# Install dev dependencies
-pip install -e ".[dev]"
+# Auto-detect format
+python -m log_analyzer analyze /var/log/application.log
 
-# Run tests
-pytest
-
-# Run with coverage
-pytest --cov=log_analyzer
+# Force specific format
+python -m log_analyzer analyze --format nginx /var/log/nginx/access.log
 ```
 
-## 📁 Project Structure
+**AI-Powered Triage**
+Ask the AI to diagnose issues, explain errors, and suggest fixes.
+```bash
+# Standard triage (uses configured provider)
+python -m log_analyzer triage /var/log/error.log
 
-```
-log-analyzer-toolkit/
-├── log_analyzer/
-│   ├── __init__.py        # Package info
-│   ├── __main__.py        # CLI entry point
-│   ├── analyzer.py        # Core analysis engine
-│   ├── cli.py             # Command-line interface
-│   ├── config.py          # Configuration management
-│   ├── parsers.py         # Log format parsers
-│   ├── reader.py          # File reading utilities
-│   ├── report.py          # Report generation
-│   ├── triage.py          # AI triage engine
-│   └── ai_providers/      # AI provider integrations
-│       ├── __init__.py
-│       ├── base.py        # Base classes and interfaces
-│       ├── factory.py     # Provider factory
-│       ├── anthropic_provider.py
-│       ├── gemini_provider.py
-│       └── ollama_provider.py
-├── tests/
-│   ├── test_analyzer.py
-│   ├── test_ai_providers.py
-│   ├── test_config.py
-│   ├── test_parsers.py
-│   └── test_triage.py
-├── examples/
-│   ├── sample_access.log
-│   └── sample_json.log
-├── pyproject.toml
-├── requirements.txt
-└── README.md
+# Output JSON for CI/CD pipelines
+python -m log_analyzer triage /var/log/error.log --json
+
+# Force a specific provider (e.g., use local llm for sensitive logs)
+python -m log_analyzer triage /var/log/secure.log --provider ollama
 ```
 
-## 🔧 Programmatic Usage
+### Step 4: Python Integration
 
+Integrate the analyzer directly into your monitoring scripts or dashboards.
+
+**Static Analysis API:**
 ```python
 from log_analyzer.analyzer import LogAnalyzer
-from log_analyzer.report import ReportGenerator
 
-# Analyze a log file
 analyzer = LogAnalyzer()
 result = analyzer.analyze("/var/log/app.log")
 
-# Print summary
-print(f"Total lines: {result.total_lines}")
-print(f"Error rate: {result.error_rate:.1f}%")
-print(f"Top errors: {result.top_errors[:5]}")
-
-# Generate a report
-report = ReportGenerator(result)
-report.save("analysis_report.md", format="markdown")
-report.save("analysis_report.html", format="html")
+print(f"Error Rate: {result.error_rate}%")
+print(f"Total Lines: {result.total_lines}")
 ```
 
-### AI Triage Usage
-
+**AI Triage API:**
 ```python
-from log_analyzer.triage import quick_triage, TriageEngine
+from log_analyzer.triage import quick_triage
 
-# Quick one-liner triage
-result = quick_triage("/var/log/app.log")
-print(result.summary)
-print(f"Severity: {result.overall_severity.value}")
+# Run diagnosis
+diagnosis = quick_triage("/var/log/app.log", provider="anthropic")
 
-# With specific provider
-result = quick_triage("/var/log/app.log", provider="ollama")
+print(f"Severity: {diagnosis.overall_severity.value}")
+print(f"Summary: {diagnosis.summary}")
 
-# Using TriageEngine for more control
-engine = TriageEngine(provider_name="anthropic")
-result = engine.triage("/var/log/app.log")
-
-for issue in result.issues:
-    print(f"[{issue.severity.value}] {issue.title}")
-    print(f"  Recommendation: {issue.recommendation}")
+for issue in diagnosis.issues:
+    print(f"Found: {issue.title}")
+    print(f"Fix: {issue.recommendation}")
 ```
 
 ## 🤝 Contributing

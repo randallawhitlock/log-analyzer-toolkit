@@ -15,8 +15,7 @@ from rich.table import Table
 from rich.text import Text
 from rich import box
 
-from .analyzer import LogAnalyzer, AnalysisResult
-from .parsers import AVAILABLE_PARSERS
+from .analyzer import LogAnalyzer, AnalysisResult, AVAILABLE_PARSERS
 
 
 console = Console()
