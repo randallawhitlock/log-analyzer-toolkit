@@ -25,11 +25,13 @@ from .parsers import (
     WindowsEventParser,
     ProxifierParser,
     HPCParser,
+    UniversalFallbackParser,
+    CustomParserRegistry,
 )
 from .reader import LogReader
 
 
-# Registry of all available parsers
+# Registry of all available parsers (specific formats only, no fallback)
 AVAILABLE_PARSERS = [
     ApacheAccessParser(),
     ApacheErrorParser(),
@@ -44,6 +46,9 @@ AVAILABLE_PARSERS = [
     ProxifierParser(),
     HPCParser(),
 ]
+
+# Full parser list including universal fallback (for use when no format detected)
+ALL_PARSERS_WITH_FALLBACK = AVAILABLE_PARSERS + [UniversalFallbackParser()]
 
 
 @dataclass
@@ -152,7 +157,7 @@ class LogAnalyzer:
         return None
     
     def analyze(self, filepath: str, parser: BaseParser = None, 
-                max_errors: int = 100) -> AnalysisResult:
+                max_errors: int = 100, use_fallback: bool = True) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
         
@@ -160,15 +165,24 @@ class LogAnalyzer:
             filepath: Path to log file
             parser: Specific parser to use. Auto-detects if None.
             max_errors: Maximum number of errors/warnings to collect
+            use_fallback: If True, use universal fallback parser when no format detected.
+                         If False, raise ValueError when format cannot be detected.
             
         Returns:
             AnalysisResult with all analysis data
+            
+        Note:
+            When fallback parser is used, the detected_format will be "universal"
+            and entries will have metadata['parser_type'] = 'fallback'.
         """
         # Detect format if not specified
         if parser is None:
             parser = self.detect_format(filepath)
             if parser is None:
-                raise ValueError(f"Could not detect log format for: {filepath}")
+                if use_fallback:
+                    parser = UniversalFallbackParser()
+                else:
+                    raise ValueError(f"Could not detect log format for: {filepath}")
         
         reader = LogReader(filepath)
         

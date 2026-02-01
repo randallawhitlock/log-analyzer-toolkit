@@ -989,3 +989,214 @@ class HPCParser(BaseParser):
             }
         )
 
+
+class UniversalFallbackParser(BaseParser):
+    """
+    Universal fallback parser using heuristic pattern detection.
+    
+    This parser attempts to extract common log elements (timestamps, levels, messages)
+    from any text-based log format. It should be used as the LAST parser in the chain
+    when no specific format is detected.
+    
+    The parser indicates that it used fallback/heuristic parsing via metadata.
+    """
+    
+    name = "universal"
+    
+    # Common timestamp patterns (ordered by specificity)
+    TIMESTAMP_PATTERNS = [
+        # ISO 8601 format
+        (r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)', 'iso'),
+        # Common log format
+        (r'(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2})', 'clf'),
+        # US date format
+        (r'(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})', 'us_date'),
+        # Syslog BSD format
+        (r'(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})', 'syslog'),
+        # Unix timestamp (epoch)
+        (r'\b(\d{10})\b', 'epoch'),
+        # Short date format
+        (r'(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', 'short'),
+    ]
+    
+    # Common log level patterns
+    LEVEL_PATTERN = re.compile(
+        r'\b(FATAL|CRITICAL|CRIT|ERROR|ERR|WARNING|WARN|INFO|DEBUG|DBG|TRACE|NOTICE)\b',
+        re.IGNORECASE
+    )
+    
+    # Level normalization map
+    LEVEL_MAP = {
+        'fatal': 'CRITICAL',
+        'critical': 'CRITICAL',
+        'crit': 'CRITICAL',
+        'error': 'ERROR',
+        'err': 'ERROR',
+        'warning': 'WARNING',
+        'warn': 'WARNING',
+        'info': 'INFO',
+        'debug': 'DEBUG',
+        'dbg': 'DEBUG',
+        'trace': 'DEBUG',
+        'notice': 'INFO',
+    }
+    
+    def can_parse(self, line: str) -> bool:
+        """
+        Universal parser can attempt to parse ANY line.
+        
+        Always returns True - this is the fallback parser.
+        """
+        return True
+    
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """
+        Parse a log line using heuristic pattern detection.
+        
+        Attempts to extract timestamps, levels, and messages from any format.
+        """
+        if not line.strip():
+            return None
+        
+        timestamp_str = None
+        timestamp_format = None
+        level = 'INFO'  # Default level
+        message = line
+        
+        # Try to extract timestamp
+        for pattern, fmt in self.TIMESTAMP_PATTERNS:
+            match = re.search(pattern, line)
+            if match:
+                timestamp_str = match.group(1)
+                timestamp_format = fmt
+                # Remove timestamp from message extraction
+                message = line[match.end():].strip()
+                if message.startswith('-') or message.startswith(':'):
+                    message = message[1:].strip()
+                break
+        
+        # Try to extract log level
+        level_match = self.LEVEL_PATTERN.search(line)
+        if level_match:
+            found_level = level_match.group(1).lower()
+            level = self.LEVEL_MAP.get(found_level, 'INFO')
+            # Try to clean level from message if it appears at the start
+            if message.upper().startswith(level_match.group(1).upper()):
+                message = message[len(level_match.group(1)):].strip()
+                if message.startswith('-') or message.startswith(':') or message.startswith('|'):
+                    message = message[1:].strip()
+        
+        # Infer level from message keywords if not found
+        if not level_match:
+            msg_lower = line.lower()
+            if 'error' in msg_lower or 'fail' in msg_lower or 'exception' in msg_lower:
+                level = 'ERROR'
+            elif 'warn' in msg_lower:
+                level = 'WARNING'
+            elif 'debug' in msg_lower:
+                level = 'DEBUG'
+        
+        return LogEntry(
+            raw=line,
+            timestamp=None,  # Would need parsing logic for each format
+            level=level,
+            message=message if message else line,
+            source=None,
+            metadata={
+                'parser_type': 'fallback',  # Indicates fallback was used
+                'timestamp_raw': timestamp_str,
+                'timestamp_format': timestamp_format,
+            }
+        )
+
+
+# =============================================================================
+# Custom Parser Registration
+# =============================================================================
+
+class CustomParserRegistry:
+    """
+    Registry for custom parser extensions.
+    
+    This allows companies to easily add their own log format parsers without
+    modifying the core codebase.
+    
+    Usage:
+        from log_analyzer.parsers import CustomParserRegistry, BaseParser
+        
+        class MyCompanyLogParser(BaseParser):
+            name = "mycompany"
+            
+            def can_parse(self, line: str) -> bool:
+                return line.startswith('[MYCO]')
+            
+            def parse(self, line: str) -> Optional[LogEntry]:
+                # Your parsing logic here
+                ...
+        
+        # Register the parser
+        CustomParserRegistry.register(MyCompanyLogParser)
+        
+        # Get all parsers (built-in + custom)
+        all_parsers = CustomParserRegistry.get_all_parsers()
+    """
+    
+    _custom_parsers: list = []
+    
+    @classmethod
+    def register(cls, parser_class: type) -> None:
+        """
+        Register a custom parser class.
+        
+        Args:
+            parser_class: A class that extends BaseParser
+        """
+        if not issubclass(parser_class, BaseParser):
+            raise TypeError(f"{parser_class} must be a subclass of BaseParser")
+        
+        # Instantiate and add to registry
+        cls._custom_parsers.append(parser_class())
+    
+    @classmethod
+    def register_instance(cls, parser: BaseParser) -> None:
+        """
+        Register an already-instantiated parser.
+        
+        Args:
+            parser: An instance of a BaseParser subclass
+        """
+        if not isinstance(parser, BaseParser):
+            raise TypeError(f"{parser} must be an instance of BaseParser")
+        
+        cls._custom_parsers.append(parser)
+    
+    @classmethod
+    def get_custom_parsers(cls) -> list:
+        """Get all registered custom parsers."""
+        return cls._custom_parsers.copy()
+    
+    @classmethod
+    def clear(cls) -> None:
+        """Clear all custom parsers (useful for testing)."""
+        cls._custom_parsers = []
+    
+    @classmethod
+    def get_all_parsers(cls, include_fallback: bool = True) -> list:
+        """
+        Get all parsers: built-in + custom + optional fallback.
+        
+        Args:
+            include_fallback: Whether to include UniversalFallbackParser at the end
+            
+        Returns:
+            List of all parser instances
+        """
+        from .analyzer import AVAILABLE_PARSERS
+        
+        parsers = AVAILABLE_PARSERS.copy()
+        parsers.extend(cls._custom_parsers)
+        
+        if include_fallback:
+            parsers.append(UniversalFallbackParser())
+        
+        return parsers
