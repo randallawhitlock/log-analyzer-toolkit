@@ -224,7 +224,10 @@ const getStatusClass = (code) => {
 }
 
 const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleString()
+  if (!dateStr) return 'Unknown'
+  // Append 'Z' to indicate UTC if not present
+  const utcStr = dateStr.endsWith('Z') ? dateStr : `${dateStr}Z`
+  return new Date(utcStr).toLocaleString()
 }
 
 const truncate = (str, len) => {
