@@ -45,6 +45,7 @@ class LogReader:
         Yields:
             Each line from the log file, stripped of trailing newlines.
         """
+        line_num = 0
         try:
             with open(self.filepath, "r", encoding=self.encoding, errors="replace") as f:
                 for line_num, line in enumerate(f, 1):

@@ -4,7 +4,7 @@ FastAPI application for Log Analyzer Toolkit.
 Main entry point for the REST API backend.
 """
 
-from datetime import datetime
+from datetime import datetime, timezone
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
@@ -82,7 +82,7 @@ async def health_check():
     return HealthResponse(
         status="healthy",
         version="0.1.0",
-        timestamp=datetime.utcnow()
+        timestamp=datetime.now(timezone.utc)
     )
 
 

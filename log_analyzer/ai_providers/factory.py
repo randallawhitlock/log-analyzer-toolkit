@@ -142,10 +142,7 @@ def get_provider(
     if default_provider and default_provider in priority_order:
         priority_order.remove(default_provider)
         priority_order.insert(0, default_provider)
-    
-        priority_order.replace(default_provider) # Wait, this line logic was removed before.
-        # I just need to remove the prints lines.
-    
+
     for provider_name in priority_order:
         if provider_name not in _PROVIDER_REGISTRY:
             continue
