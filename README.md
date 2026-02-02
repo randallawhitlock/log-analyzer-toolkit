@@ -43,8 +43,8 @@ To unlock intelligent features, configure your preferred AI provider.
 
 **Option A: Anthropic Claude (Recommended)**
 Best for high-accuracy reasoning and complex root cause analysis.
-```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
+export LOG_ANALYZER_PROVIDER="anthropic"  # Optional: Force this provider
 ```
 
 **Option B: Google Gemini**
@@ -57,7 +57,7 @@ export GOOGLE_API_KEY="AIza..."
 Run completely offline with local models (requires [Ollama](https://ollama.com/)).
 ```bash
 ollama serve
-ollama pull llama3.3
+ollama pull llama3
 ```
 
 **Verify Configuration:**
@@ -139,7 +139,11 @@ We welcome contributions to the Log Analyzer Toolkit! Whether it's bug fixes, ne
     ```bash
     python -m venv venv
     source venv/bin/activate  # or venv\Scripts\activate on Windows
-    pip install -e ".[dev]"
+    python -m venv venv
+    source venv/bin/activate  # or venv\Scripts\activate on Windows
+    pip install -e "."
+    # If using Ollama, ensure httpx is installed
+    pip install httpx
     ```
 
 3.  **Run Tests**
