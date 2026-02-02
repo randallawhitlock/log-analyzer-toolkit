@@ -154,7 +154,10 @@ const getErrorClass = (rate) => {
 }
 
 const formatDate = (dateStr) => {
-  const date = new Date(dateStr)
+  if (!dateStr) return 'Unknown'
+  // Append 'Z' to indicate UTC if not present
+  const utcStr = dateStr.endsWith('Z') ? dateStr : `${dateStr}Z`
+  const date = new Date(utcStr)
   return date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })
 }
 
