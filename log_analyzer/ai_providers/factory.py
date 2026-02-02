@@ -9,6 +9,7 @@ import os
 from typing import Optional
 
 from .base import AIProvider, ProviderNotAvailableError
+from ..config import get_config
 
 
 # Registry of available provider classes (populated on import)
@@ -133,8 +134,17 @@ def get_provider(
         return provider
     
     # Auto-detect best available provider
-    # Priority: Anthropic > Gemini > Ollama
+    # Priority: Configured default > Anthropic > Gemini > Ollama
     priority_order = ["anthropic", "gemini", "ollama"]
+    
+    # Check configured default first
+    default_provider = get_config().default_provider
+    if default_provider and default_provider in priority_order:
+        priority_order.remove(default_provider)
+        priority_order.insert(0, default_provider)
+    
+        priority_order.replace(default_provider) # Wait, this line logic was removed before.
+        # I just need to remove the prints lines.
     
     for provider_name in priority_order:
         if provider_name not in _PROVIDER_REGISTRY:

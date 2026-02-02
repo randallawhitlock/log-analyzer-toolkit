@@ -43,8 +43,8 @@ To unlock intelligent features, configure your preferred AI provider.
 
 **Option A: Anthropic Claude (Recommended)**
 Best for high-accuracy reasoning and complex root cause analysis.
-```bash
 export ANTHROPIC_API_KEY="sk-ant-..."
+export LOG_ANALYZER_PROVIDER="anthropic"  # Optional: Force this provider
 ```
 
 **Option B: Google Gemini**
@@ -58,6 +58,25 @@ Run completely offline with local models (requires [Ollama](https://ollama.com/)
 ```bash
 ollama serve
 ollama pull llama3.3
+```
+
+#### ⚠️ Hardware Constraints & Model Selection
+Running local LLMs requires sufficient RAM. Using a model too large for your system will cause performance degradation.
+
+| System RAM | Recommended Max Model | Best Choices |
+| :--- | :--- | :--- |
+| **8GB** | < 7B Params | `phi3`, `mistral`, `gemma2:2b` |
+| **16GB** (e.g., M2/M4 Air) | 7B - 14B Params | `llama3.3`, `qwen2.5-coder:14b`* |
+| **32GB+** | 30B+ Params | `qwen2.5-coder:32b`, `mixtral` |
+
+**Recommendation for 16GB Macs:**
+For the best balance, use **Llama 3.3 (8B)** (default).
+If you need specialized coding capabilities, you can try **Qwen 2.5 Coder (14B)**, but be aware it uses ~9GB RAM, leaving less for your OS.
+
+**To use Qwen 2.5 Coder:**
+```bash
+ollama pull qwen2.5-coder:14b
+# Then update ~/.log-analyzer/config.yaml to use this model
 ```
 
 **Verify Configuration:**
@@ -139,7 +158,11 @@ We welcome contributions to the Log Analyzer Toolkit! Whether it's bug fixes, ne
     ```bash
     python -m venv venv
     source venv/bin/activate  # or venv\Scripts\activate on Windows
-    pip install -e ".[dev]"
+    python -m venv venv
+    source venv/bin/activate  # or venv\Scripts\activate on Windows
+    pip install -e "."
+    # If using Ollama, ensure httpx is installed
+    pip install httpx
     ```
 
 3.  **Run Tests**

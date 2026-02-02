@@ -27,6 +27,9 @@
           </div>
         </div>
         <div class="header-actions">
+          <button @click="exportJSON" class="export-btn" title="Download analysis as JSON">
+            📥 Export
+          </button>
           <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn">
             <span v-if="triageLoading" class="btn-spinner"></span>
             {{ triageLoading ? 'Running...' : '🤖 Run AI Triage' }}
@@ -100,6 +103,28 @@
         </section>
       </div>
 
+      <!-- Log Sample Preview -->
+      <section class="panel log-sample-section">
+        <div class="section-header-row">
+          <h3>📋 Log Sample Preview</h3>
+          <button @click="toggleSample" class="toggle-btn">
+            {{ showSample ? '▲ Hide' : '▼ Show' }}
+          </button>
+        </div>
+        <div v-if="showSample" class="log-sample">
+          <div v-if="loadingSamples" class="sample-loading">
+            Loading log samples...
+          </div>
+          <div v-else-if="logSamples.length > 0" class="sample-lines">
+            <div v-for="(line, idx) in logSamples" :key="idx" class="log-line">
+              <span class="line-num">{{ idx + 1 }}</span>
+              <span class="line-content">{{ line }}</span>
+            </div>
+          </div>
+          <div v-else class="no-samples">No sample data available</div>
+        </div>
+      </section>
+
       <!-- Triage Results -->
       <section v-if="triage" class="triage-section">
         <h2>
@@ -164,6 +189,9 @@ const {
 const analysis = ref(null)
 const triage = ref(null)
 const triageLoading = ref(false)
+const showSample = ref(false)
+const loadingSamples = ref(false)
+const logSamples = ref([])
 
 const topErrors = computed(() => {
   return analysis.value?.top_errors?.slice(0, 10) || []
@@ -196,7 +224,10 @@ const getStatusClass = (code) => {
 }
 
 const formatDate = (dateStr) => {
-  return new Date(dateStr).toLocaleString()
+  if (!dateStr) return 'Unknown'
+  // Append 'Z' to indicate UTC if not present
+  const utcStr = dateStr.endsWith('Z') ? dateStr : `${dateStr}Z`
+  return new Date(utcStr).toLocaleString()
 }
 
 const truncate = (str, len) => {
@@ -227,6 +258,70 @@ const deleteCurrentAnalysis = async () => {
     console.error('Delete failed:', err)
     alert('Failed to delete: ' + (err.message || 'Unknown error'))
   }
+}
+
+/**
+ * Export analysis data as JSON file
+ */
+const exportJSON = () => {
+  if (!analysis.value) return
+  
+  const exportData = {
+    filename: analysis.value.filename,
+    detected_format: analysis.value.detected_format,
+    analyzed_at: analysis.value.created_at,
+    statistics: {
+      total_lines: analysis.value.total_lines,
+      parsed_lines: analysis.value.parsed_lines,
+      failed_lines: analysis.value.failed_lines,
+      parse_success_rate: analysis.value.parse_success_rate,
+      error_rate: analysis.value.error_rate
+    },
+    level_counts: analysis.value.level_counts,
+    top_errors: analysis.value.top_errors,
+    top_sources: analysis.value.top_sources,
+    status_codes: analysis.value.status_codes,
+    time_range: {
+      earliest: analysis.value.earliest_timestamp,
+      latest: analysis.value.latest_timestamp,
+      span: analysis.value.time_span
+    },
+    triage: triage.value || null
+  }
+  
+  const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
+  const url = URL.createObjectURL(blob)
+  const a = document.createElement('a')
+  a.href = url
+  a.download = `analysis_${analysis.value.filename.replace(/\.[^/.]+$/, '')}.json`
+  document.body.appendChild(a)
+  a.click()
+  document.body.removeChild(a)
+  URL.revokeObjectURL(url)
+}
+
+/**
+ * Toggle log sample visibility and load samples if needed
+ */
+const toggleSample = () => {
+  showSample.value = !showSample.value
+  if (showSample.value && logSamples.value.length === 0) {
+    loadLogSamples()
+  }
+}
+
+/**
+ * Load sample log lines (simulated - in real app would call backend)
+ */
+const loadLogSamples = () => {
+  loadingSamples.value = true
+  // Simulate loading - in production, this would fetch from backend
+  setTimeout(() => {
+    // Use top_errors as sample data since we don't have raw lines endpoint
+    const samples = analysis.value?.top_errors?.slice(0, 10).map(e => e[0]) || []
+    logSamples.value = samples.length > 0 ? samples : ['No sample log lines available']
+    loadingSamples.value = false
+  }, 300)
 }
 
 onMounted(async () => {
@@ -571,5 +666,103 @@ onMounted(async () => {
   border-radius: 8px;
   border-left: 3px solid var(--color-primary, #646cff);
   font-size: 13px;
+}
+
+/* Export Button */
+.export-btn {
+  padding: 10px 16px;
+  background: var(--color-bg-tertiary, #2a2a4e);
+  border: 1px solid var(--color-border, #3a3a55);
+  border-radius: 8px;
+  color: var(--color-text, #fff);
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.export-btn:hover {
+  background: var(--color-success, #4caf50);
+  border-color: var(--color-success, #4caf50);
+}
+
+/* Log Sample Section */
+.log-sample-section {
+  margin-bottom: 24px;
+}
+
+.section-header-row {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.section-header-row h3 {
+  margin: 0;
+}
+
+.toggle-btn {
+  padding: 6px 12px;
+  background: transparent;
+  border: 1px solid var(--color-border, #3a3a55);
+  border-radius: 6px;
+  color: var(--color-text-muted, #888);
+  font-size: 12px;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.toggle-btn:hover {
+  border-color: var(--color-primary, #646cff);
+  color: var(--color-primary, #646cff);
+}
+
+.log-sample {
+  margin-top: 16px;
+}
+
+.sample-loading {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-text-muted, #888);
+}
+
+.sample-lines {
+  background: var(--color-bg-tertiary, #2a2a4e);
+  border-radius: 8px;
+  padding: 12px;
+  max-height: 400px;
+  overflow-y: auto;
+}
+
+.log-line {
+  display: flex;
+  gap: 12px;
+  padding: 6px 8px;
+  font-family: var(--font-mono, monospace);
+  font-size: 12px;
+  border-bottom: 1px solid var(--color-border, #3a3a55);
+}
+
+.log-line:last-child {
+  border-bottom: none;
+}
+
+.line-num {
+  color: var(--color-text-dim, #666);
+  min-width: 24px;
+  text-align: right;
+  flex-shrink: 0;
+}
+
+.line-content {
+  color: var(--color-text-muted, #aaa);
+  word-break: break-word;
+  white-space: pre-wrap;
+}
+
+.no-samples {
+  text-align: center;
+  padding: 24px;
+  color: var(--color-text-dim, #666);
 }
 </style>
