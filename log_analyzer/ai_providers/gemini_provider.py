@@ -26,13 +26,14 @@ from .base import (
 
 # Latest Gemini models as of February 2026
 GEMINI_MODELS = {
-    "gemini-3-pro": "gemini-3-pro",           # Most capable model
-    "gemini-3-flash": "gemini-3-flash",       # Fast and efficient
-    "gemini-3-flash-lite": "gemini-3-flash-lite",  # Most cost-effective
+    "gemini-3-pro-preview": "gemini-3-pro-preview", # Preview model
+    "gemini-1.5-pro": "gemini-1.5-pro",           # Stable
+    "gemini-1.5-flash": "gemini-1.5-flash",       # Fast and efficient
 }
 
 # Default model - Gemini 3 Pro for best log analysis quality
-DEFAULT_MODEL = GEMINI_MODELS["gemini-3-pro"]
+# Default model
+DEFAULT_MODEL = GEMINI_MODELS["gemini-3-pro-preview"]
 
 
 class GeminiProvider(AIProvider):
