@@ -32,7 +32,7 @@ OLLAMA_MODELS = {
 }
 
 # Default model - llama3.3 offers best quality for log analysis
-DEFAULT_MODEL = "llama3.3:latest"
+DEFAULT_MODEL = "llama3"
 DEFAULT_HOST = "http://localhost:11434"
 
 
