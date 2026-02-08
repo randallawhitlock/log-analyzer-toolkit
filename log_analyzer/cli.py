@@ -14,6 +14,7 @@ from rich.console import Console
 from rich.panel import Panel
 from rich.table import Table
 from rich.text import Text
+from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TaskProgressColumn
 from rich import box
 
 from .analyzer import LogAnalyzer, AnalysisResult, AVAILABLE_PARSERS
@@ -115,34 +116,76 @@ def analyze(filepath: str, log_format: str, max_errors: int):
 
     console.print()
 
-    with console.status("[bold blue]Analyzing log file..."):
-        analyzer = LogAnalyzer()
+    analyzer = LogAnalyzer()
 
-        # Get parser
-        parser = None
-        if log_format != 'auto':
-            for p in AVAILABLE_PARSERS:
-                if p.name == log_format:
-                    parser = p
-                    logger.debug(f"Using parser: {parser.name}")
-                    break
+    # Get parser
+    parser = None
+    if log_format != 'auto':
+        for p in AVAILABLE_PARSERS:
+            if p.name == log_format:
+                parser = p
+                logger.debug(f"Using parser: {parser.name}")
+                break
 
-        try:
-            result = analyzer.analyze(filepath, parser=parser, max_errors=max_errors)
-            logger.info(f"Analysis completed: {result.parsed_lines} lines parsed, "
-                       f"{result.failed_lines} failed, error_rate={result.error_rate:.1f}%")
-        except ValueError as e:
-            logger.error(f"ValueError during analysis: {e}")
-            console.print(f"[red]Error:[/red] {e}")
-            sys.exit(1)
-        except FileNotFoundError as e:
-            logger.error(f"File not found: {e}")
-            console.print(f"[red]Error:[/red] {e}")
-            sys.exit(1)
-        except Exception as e:
-            logger.error(f"Unexpected error during analysis: {e}", exc_info=True)
-            console.print(f"[red]Unexpected error:[/red] {e}")
-            sys.exit(1)
+    try:
+        # Count lines for progress tracking
+        from .reader import LogReader
+        with console.status("[dim]Counting lines..."):
+            reader = LogReader(filepath)
+            total_lines = reader.count_lines()
+            logger.debug(f"File has {total_lines:,} lines")
+
+        # Create progress bar
+        with Progress(
+            SpinnerColumn(),
+            TextColumn("[progress.description]{task.description}"),
+            BarColumn(),
+            TaskProgressColumn(),
+            TextColumn("•"),
+            TimeElapsedColumn(),
+            console=console,
+            transient=False,
+        ) as progress:
+            task = progress.add_task(
+                f"[cyan]Analyzing {Path(filepath).name}...",
+                total=total_lines
+            )
+
+            # Create a simple progress updater
+            class ProgressUpdater:
+                def __init__(self, progress_obj, task_id):
+                    self.progress = progress_obj
+                    self.task_id = task_id
+
+                def update(self, advance=1):
+                    self.progress.update(self.task_id, advance=advance)
+
+            result = analyzer.analyze(
+                filepath,
+                parser=parser,
+                max_errors=max_errors,
+                progress_callback=ProgressUpdater(progress, task)
+            )
+
+        logger.info(f"Analysis completed: {result.parsed_lines} lines parsed, "
+                   f"{result.failed_lines} failed, error_rate={result.error_rate:.1f}%")
+
+    except KeyboardInterrupt:
+        logger.info("Analysis cancelled by user")
+        console.print("\n[yellow]Analysis cancelled by user.[/yellow]")
+        sys.exit(130)  # Standard exit code for Ctrl+C
+    except ValueError as e:
+        logger.error(f"ValueError during analysis: {e}")
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except FileNotFoundError as e:
+        logger.error(f"File not found: {e}")
+        console.print(f"[red]Error:[/red] {e}")
+        sys.exit(1)
+    except Exception as e:
+        logger.error(f"Unexpected error during analysis: {e}", exc_info=True)
+        console.print(f"[red]Unexpected error:[/red] {e}")
+        sys.exit(1)
 
     _display_analysis(result)
 
@@ -393,6 +436,10 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
                        f"overall_severity={result.overall_severity.value}, "
                        f"confidence={result.confidence:.2f}")
 
+    except KeyboardInterrupt:
+        logger.info("Triage cancelled by user")
+        console.print("\n[yellow]Triage cancelled by user.[/yellow]")
+        sys.exit(130)  # Standard exit code for Ctrl+C
     except ProviderNotAvailableError as e:
         logger.error(f"Provider not available: {e}")
         console.print(f"[red]Error:[/red] {e}")

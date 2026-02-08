@@ -10,7 +10,7 @@ import time
 from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Any
 
 from .parsers import (
     BaseParser,
@@ -153,7 +153,8 @@ class LogAnalyzer:
         return None
     
     def analyze(self, filepath: str, parser: BaseParser = None,
-                max_errors: int = DEFAULT_MAX_ERRORS) -> AnalysisResult:
+                max_errors: int = DEFAULT_MAX_ERRORS,
+                progress_callback: Optional[Any] = None) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
 
@@ -161,6 +162,7 @@ class LogAnalyzer:
             filepath: Path to log file
             parser: Specific parser to use. Auto-detects if None.
             max_errors: Maximum number of errors/warnings to collect
+            progress_callback: Optional callback for progress updates (Rich Progress task)
 
         Returns:
             AnalysisResult with all analysis data
@@ -198,16 +200,20 @@ class LogAnalyzer:
         # Process each line
         for line in reader.read_lines():
             total_lines += 1
-            
+
+            # Update progress
+            if progress_callback and hasattr(progress_callback, 'update'):
+                progress_callback.update(advance=1)
+
             if not line.strip():
                 continue
-            
+
             entry = parser.parse(line)
-            
+
             if entry is None:
                 failed_lines += 1
                 continue
-            
+
             parsed_lines += 1
             
             # Count levels
