@@ -5,6 +5,7 @@ Provides user-friendly commands for analyzing log files with
 beautiful terminal output using the Rich library.
 """
 
+import logging
 import sys
 from pathlib import Path
 
@@ -19,6 +20,40 @@ from .analyzer import LogAnalyzer, AnalysisResult, AVAILABLE_PARSERS
 
 
 console = Console()
+logger = logging.getLogger(__name__)
+
+
+def setup_logging(verbose: bool = False, log_file: str = None):
+    """Configure logging based on user preferences."""
+    # Set level based on verbosity
+    level = logging.DEBUG if verbose else logging.INFO
+
+    # Configure format
+    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+
+    # Configure handlers
+    handlers = []
+
+    # Always add file handler if specified
+    if log_file:
+        file_handler = logging.FileHandler(log_file)
+        file_handler.setLevel(logging.DEBUG)
+        file_handler.setFormatter(logging.Formatter(log_format))
+        handlers.append(file_handler)
+
+    # Add console handler only if verbose
+    if verbose:
+        console_handler = logging.StreamHandler()
+        console_handler.setLevel(level)
+        console_handler.setFormatter(logging.Formatter(log_format))
+        handlers.append(console_handler)
+
+    # Configure root logger
+    logging.basicConfig(
+        level=level,
+        format=log_format,
+        handlers=handlers if handlers else [logging.NullHandler()]
+    )
 
 
 def format_level(level: str) -> Text:
@@ -41,52 +76,75 @@ def format_count(count: int, total: int) -> Text:
 
 @click.group()
 @click.version_option(version='0.1.0')
-def cli():
+@click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging output')
+@click.option('--log-file', type=click.Path(), help='Write logs to a file')
+@click.pass_context
+def cli(ctx, verbose: bool, log_file: str):
     """
     Log Analyzer Toolkit - Parse and analyze log files.
-    
+
     A powerful tool for troubleshooting and analyzing logs from
     various sources including Apache, nginx, JSON, and syslog formats.
     """
-    pass
+    # Setup logging based on user preferences
+    setup_logging(verbose=verbose, log_file=log_file)
+
+    # Store config in context for subcommands
+    ctx.ensure_object(dict)
+    ctx.obj['verbose'] = verbose
+    ctx.obj['log_file'] = log_file
+
+    logger.debug(f"CLI initialized with verbose={verbose}, log_file={log_file}")
 
 
 @cli.command()
 @click.argument('filepath', type=click.Path(exists=True))
-@click.option('--format', '-f', 'log_format', 
-              type=click.Choice(['auto', 'apache_access', 'apache_error', 
+@click.option('--format', '-f', 'log_format',
+              type=click.Choice(['auto', 'apache_access', 'apache_error',
                                 'nginx_access', 'json', 'syslog']),
               default='auto', help='Log format (default: auto-detect)')
-@click.option('--max-errors', '-e', default=50, 
+@click.option('--max-errors', '-e', default=50,
               help='Maximum errors to display')
 def analyze(filepath: str, log_format: str, max_errors: int):
     """
     Analyze a log file and display summary statistics.
-    
+
     FILEPATH is the path to the log file to analyze.
     """
+    logger.info(f"Starting analysis of {filepath}")
+    logger.debug(f"Parameters: log_format={log_format}, max_errors={max_errors}")
+
     console.print()
-    
+
     with console.status("[bold blue]Analyzing log file..."):
         analyzer = LogAnalyzer()
-        
+
         # Get parser
         parser = None
         if log_format != 'auto':
             for p in AVAILABLE_PARSERS:
                 if p.name == log_format:
                     parser = p
+                    logger.debug(f"Using parser: {parser.name}")
                     break
-        
+
         try:
             result = analyzer.analyze(filepath, parser=parser, max_errors=max_errors)
+            logger.info(f"Analysis completed: {result.parsed_lines} lines parsed, "
+                       f"{result.failed_lines} failed, error_rate={result.error_rate:.1f}%")
         except ValueError as e:
+            logger.error(f"ValueError during analysis: {e}")
             console.print(f"[red]Error:[/red] {e}")
             sys.exit(1)
         except FileNotFoundError as e:
+            logger.error(f"File not found: {e}")
             console.print(f"[red]Error:[/red] {e}")
             sys.exit(1)
-    
+        except Exception as e:
+            logger.error(f"Unexpected error during analysis: {e}", exc_info=True)
+            console.print(f"[red]Unexpected error:[/red] {e}")
+            sys.exit(1)
+
     _display_analysis(result)
 
 
@@ -303,20 +361,24 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
     from .ai_providers import get_provider, ProviderNotAvailableError
     from .ai_providers.base import Severity
     
+    logger.info(f"Starting AI triage of {filepath}")
+    logger.debug(f"Parameters: provider={provider}, log_format={log_format}, output_json={output_json}")
+
     console.print()
-    
+
     # Get provider name (None means auto-detect)
     provider_name = None if provider == 'auto' else provider
-    
+
     try:
         with console.status("[bold blue]Initializing AI provider..."):
             engine = TriageEngine(provider_name=provider_name)
             ai_provider = engine._get_provider()
-            
+            logger.info(f"AI provider initialized: {ai_provider.name} ({ai_provider.get_model()})")
+
         console.print(f"[dim]Using provider:[/dim] [cyan]{ai_provider.name}[/cyan] "
                      f"([dim]{ai_provider.get_model()}[/dim])")
         console.print()
-        
+
         with console.status("[bold blue]Analyzing log file..."):
             # Get parser if specified
             parser = None
@@ -324,11 +386,16 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
                 for p in AVAILABLE_PARSERS:
                     if p.name == log_format:
                         parser = p.name
+                        logger.debug(f"Using parser: {parser}")
                         break
-            
+
             result = engine.triage(filepath, parser=parser)
-        
+            logger.info(f"Triage completed: {len(result.issues)} issues identified, "
+                       f"overall_severity={result.overall_severity.value}, "
+                       f"confidence={result.confidence:.2f}")
+
     except ProviderNotAvailableError as e:
+        logger.error(f"Provider not available: {e}")
         console.print(f"[red]Error:[/red] {e}")
         console.print()
         console.print("[yellow]To configure a provider:[/yellow]")
@@ -337,9 +404,11 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
         console.print("  • Start Ollama locally: ollama serve")
         sys.exit(1)
     except ValueError as e:
+        logger.error(f"ValueError during triage: {e}")
         console.print(f"[red]Error:[/red] {e}")
         sys.exit(1)
     except Exception as e:
+        logger.error(f"Unexpected error during triage: {e}", exc_info=True)
         console.print(f"[red]Error during analysis:[/red] {e}")
         sys.exit(1)
     
