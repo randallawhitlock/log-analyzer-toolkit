@@ -7,7 +7,7 @@ including error detection, pattern recognition, and statistics.
 
 import logging
 import time
-from collections import Counter, defaultdict
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from typing import Iterator, Optional
@@ -22,6 +22,7 @@ from .parsers import (
     SyslogParser,
 )
 from .reader import LogReader
+from .constants import DEFAULT_SAMPLE_SIZE, DEFAULT_MAX_ERRORS
 
 
 logger = logging.getLogger(__name__)
@@ -105,7 +106,7 @@ class LogAnalyzer:
         """
         self.parsers = parsers or AVAILABLE_PARSERS
     
-    def detect_format(self, filepath: str, sample_size: int = 100) -> Optional[BaseParser]:
+    def detect_format(self, filepath: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> Optional[BaseParser]:
         """
         Auto-detect the log format by sampling lines.
 
@@ -152,7 +153,7 @@ class LogAnalyzer:
         return None
     
     def analyze(self, filepath: str, parser: BaseParser = None,
-                max_errors: int = 100) -> AnalysisResult:
+                max_errors: int = DEFAULT_MAX_ERRORS) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
 

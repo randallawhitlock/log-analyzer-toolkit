@@ -26,6 +26,12 @@ from .ai_providers.base import (
     TriageIssue,
     TriageResult,
 )
+from .constants import (
+    MAX_MESSAGE_LENGTH,
+    DEFAULT_MAX_ERRORS,
+    CHARS_PER_TOKEN,
+    MAX_DISPLAY_ENTRIES,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -114,13 +120,13 @@ def build_triage_prompt(result: AnalysisResult) -> str:
     top_error_lines = []
     for msg, count in result.top_errors[:10]:
         # Truncate long messages
-        truncated = msg[:100] + "..." if len(msg) > 100 else msg
+        truncated = msg[:MAX_MESSAGE_LENGTH] + "..." if len(msg) > MAX_MESSAGE_LENGTH else msg
         top_error_lines.append(f"- [{count}x] {truncated}")
     top_errors = "\n".join(top_error_lines) or "- No errors detected"
     
     # Build sample error entries
     sample_error_lines = []
-    for entry in result.errors[:5]:
+    for entry in result.errors[:MAX_DISPLAY_ENTRIES]:
         ts = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") if entry.timestamp else "---"
         msg = entry.message[:200] + "..." if len(entry.message) > 200 else entry.message
         sample_error_lines.append(f"[{ts}] {entry.level}: {msg}")
@@ -147,8 +153,8 @@ def build_triage_prompt(result: AnalysisResult) -> str:
         sample_errors=sample_errors,
     )
 
-    # Estimate token count (rough: 4 chars per token)
-    estimated_tokens = len(prompt) // 4
+    # Estimate token count
+    estimated_tokens = len(prompt) // CHARS_PER_TOKEN
     logger.debug(f"Triage prompt built: {len(prompt)} chars, ~{estimated_tokens} tokens")
 
     return prompt
@@ -294,7 +300,7 @@ class TriageEngine:
         self,
         filepath: str,
         parser: Optional[str] = None,
-        max_errors: int = 50,
+        max_errors: int = DEFAULT_MAX_ERRORS,
     ) -> TriageResult:
         """
         Perform intelligent triage on a log file.

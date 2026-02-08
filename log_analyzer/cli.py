@@ -17,6 +17,12 @@ from rich.text import Text
 from rich import box
 
 from .analyzer import LogAnalyzer, AnalysisResult, AVAILABLE_PARSERS
+from .constants import (
+    LEVEL_COLORS,
+    MAX_MESSAGE_LENGTH,
+    MAX_DISPLAY_ENTRIES,
+    DEFAULT_MAX_ERRORS,
+)
 
 
 console = Console()
@@ -58,14 +64,7 @@ def setup_logging(verbose: bool = False, log_file: str = None):
 
 def format_level(level: str) -> Text:
     """Format log level with appropriate color."""
-    colors = {
-        'CRITICAL': 'bold red',
-        'ERROR': 'red',
-        'WARNING': 'yellow',
-        'INFO': 'green',
-        'DEBUG': 'dim',
-    }
-    return Text(level, style=colors.get(level, 'white'))
+    return Text(level, style=LEVEL_COLORS.get(level, 'white'))
 
 
 def format_count(count: int, total: int) -> Text:
@@ -103,7 +102,7 @@ def cli(ctx, verbose: bool, log_file: str):
               type=click.Choice(['auto', 'apache_access', 'apache_error',
                                 'nginx_access', 'json', 'syslog']),
               default='auto', help='Log format (default: auto-detect)')
-@click.option('--max-errors', '-e', default=50,
+@click.option('--max-errors', '-e', default=DEFAULT_MAX_ERRORS,
               help='Maximum errors to display')
 def analyze(filepath: str, log_format: str, max_errors: int):
     """
@@ -233,9 +232,9 @@ def _display_analysis(result: AnalysisResult):
         errors = Table(title="Top Error Messages", box=box.ROUNDED)
         errors.add_column("Count", justify="right", style="red")
         errors.add_column("Message")
-        
-        for msg, count in result.top_errors[:5]:
-            truncated = msg[:80] + "..." if len(msg) > 80 else msg
+
+        for msg, count in result.top_errors[:MAX_DISPLAY_ENTRIES]:
+            truncated = msg[:MAX_MESSAGE_LENGTH] + "..." if len(msg) > MAX_MESSAGE_LENGTH else msg
             errors.add_row(str(count), truncated)
         
         console.print(errors)
@@ -246,8 +245,8 @@ def _display_analysis(result: AnalysisResult):
         sources = Table(title="Top Sources", box=box.ROUNDED)
         sources.add_column("Source", style="cyan")
         sources.add_column("Requests", justify="right")
-        
-        for source, count in result.top_sources[:5]:
+
+        for source, count in result.top_sources[:MAX_DISPLAY_ENTRIES]:
             sources.add_row(source, f"{count:,}")
         
         console.print(sources)
@@ -297,7 +296,7 @@ def errors(filepath: str, level: str, limit: int):
             ts = entry.timestamp.strftime("%H:%M:%S") if entry.timestamp else "---"
             console.print(f"[dim]{ts}[/dim] ", end="")
             console.print(format_level(entry.level), end=" ")
-            console.print(entry.message[:100])
+            console.print(entry.message[:MAX_MESSAGE_LENGTH])
             
             count += 1
             if count >= limit:
