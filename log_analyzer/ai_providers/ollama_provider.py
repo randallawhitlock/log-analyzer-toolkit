@@ -10,6 +10,7 @@ Privacy Notes:
     - Requires Ollama to be installed and running locally
 """
 
+import logging
 import time
 from typing import Optional
 
@@ -19,6 +20,9 @@ from .base import (
     AIError,
     ProviderNotAvailableError,
 )
+
+
+logger = logging.getLogger(__name__)
 
 
 # Recommended models for log analysis
@@ -76,19 +80,36 @@ class OllamaProvider(AIProvider):
         
         # Lazily initialize client
         self._client = None
-    
-    def __del__(self):
-        """Clean up httpx client on deletion."""
+        logger.debug(f"OllamaProvider initialized: host={self._host}, model={self._model}")
+
+    def __enter__(self):
+        """Context manager entry."""
+        return self
+
+    def __exit__(self, exc_type, exc_val, exc_tb):
+        """Context manager exit - ensures cleanup."""
         self.close()
-    
+        return False  # Don't suppress exceptions
+
+    def __del__(self):
+        """
+        Cleanup on deletion (fallback).
+
+        Note: Context manager (__enter__/__exit__) is preferred.
+        This is a fallback for cases where context manager isn't used.
+        """
+        self.close()
+
     def close(self):
         """Close the httpx client and release connections."""
         if self._client is not None:
             try:
                 self._client.close()
-            except Exception:
-                pass  # Ignore errors during cleanup
-            self._client = None
+                logger.debug(f"Ollama client closed successfully")
+            except Exception as e:
+                logger.warning(f"Error closing Ollama client: {e}")
+            finally:
+                self._client = None
     
     def _get_client(self):
         """

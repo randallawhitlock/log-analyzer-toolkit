@@ -12,6 +12,7 @@ The triage engine:
 """
 
 import json
+import logging
 import re
 import time
 from typing import Optional
@@ -25,6 +26,15 @@ from .ai_providers.base import (
     TriageIssue,
     TriageResult,
 )
+from .constants import (
+    MAX_MESSAGE_LENGTH,
+    DEFAULT_MAX_ERRORS,
+    CHARS_PER_TOKEN,
+    MAX_DISPLAY_ENTRIES,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 # System prompt for log triage
@@ -88,13 +98,15 @@ Respond with ONLY the JSON object, no additional text."""
 def build_triage_prompt(result: AnalysisResult) -> str:
     """
     Build a prompt for AI triage from analysis results.
-    
+
     Args:
         result: AnalysisResult from LogAnalyzer
-        
+
     Returns:
         Formatted prompt string
     """
+    logger.debug(f"Building triage prompt for {result.filepath}")
+
     # Build severity breakdown
     severity_lines = []
     for level in ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]:
@@ -108,13 +120,13 @@ def build_triage_prompt(result: AnalysisResult) -> str:
     top_error_lines = []
     for msg, count in result.top_errors[:10]:
         # Truncate long messages
-        truncated = msg[:100] + "..." if len(msg) > 100 else msg
+        truncated = msg[:MAX_MESSAGE_LENGTH] + "..." if len(msg) > MAX_MESSAGE_LENGTH else msg
         top_error_lines.append(f"- [{count}x] {truncated}")
     top_errors = "\n".join(top_error_lines) or "- No errors detected"
     
     # Build sample error entries
     sample_error_lines = []
-    for entry in result.errors[:5]:
+    for entry in result.errors[:MAX_DISPLAY_ENTRIES]:
         ts = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") if entry.timestamp else "---"
         msg = entry.message[:200] + "..." if len(entry.message) > 200 else entry.message
         sample_error_lines.append(f"[{ts}] {entry.level}: {msg}")
@@ -129,7 +141,7 @@ def build_triage_prompt(result: AnalysisResult) -> str:
         time_range = "Unknown"
     
     # Build the prompt
-    return TRIAGE_PROMPT_TEMPLATE.format(
+    prompt = TRIAGE_PROMPT_TEMPLATE.format(
         filepath=result.filepath,
         format=result.detected_format,
         total_lines=result.total_lines,
@@ -141,35 +153,48 @@ def build_triage_prompt(result: AnalysisResult) -> str:
         sample_errors=sample_errors,
     )
 
+    # Estimate token count
+    estimated_tokens = len(prompt) // CHARS_PER_TOKEN
+    logger.debug(f"Triage prompt built: {len(prompt)} chars, ~{estimated_tokens} tokens")
+
+    return prompt
+
 
 def parse_triage_response(response: AIResponse, result: AnalysisResult) -> TriageResult:
     """
     Parse AI response into a TriageResult.
-    
+
     Args:
         response: AIResponse from AI provider
         result: Original AnalysisResult for context
-        
+
     Returns:
         Parsed TriageResult
     """
+    logger.debug(f"Parsing triage response from {response.provider} "
+                f"(latency={response.latency_ms}ms, length={len(response.content)} chars)")
+
     content = response.content.strip()
-    
+
     # Try to extract JSON from the response
     # Handle cases where the response includes markdown code blocks
     json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
     if json_match:
+        logger.debug("Extracted JSON from markdown code block")
         content = json_match.group(1)
-    
+
     # Try to find JSON object in the content
     json_start = content.find('{')
     json_end = content.rfind('}') + 1
     if json_start >= 0 and json_end > json_start:
         content = content[json_start:json_end]
-    
+
     try:
         data = json.loads(content)
+        logger.debug(f"Successfully parsed JSON response with {len(data.get('issues', []))} issues")
     except json.JSONDecodeError as e:
+        logger.error(f"Failed to parse JSON response: {e}")
+        logger.debug(f"Response content: {content[:500]}")
         # Return a fallback result if parsing fails
         return TriageResult(
             summary=f"AI analysis completed but response parsing failed: {e}",
@@ -263,55 +288,72 @@ class TriageEngine:
     def _get_provider(self) -> AIProvider:
         """Get or create the AI provider."""
         if self._provider is not None:
+            logger.debug(f"Using cached provider: {self._provider.name}")
             return self._provider
-        
+
+        logger.debug(f"Initializing AI provider: {self._provider_name or 'auto-detect'}")
         self._provider = get_provider(self._provider_name)
+        logger.info(f"AI provider initialized: {self._provider.name} ({self._provider.get_model()})")
         return self._provider
     
     def triage(
         self,
         filepath: str,
         parser: Optional[str] = None,
-        max_errors: int = 50,
+        max_errors: int = DEFAULT_MAX_ERRORS,
     ) -> TriageResult:
         """
         Perform intelligent triage on a log file.
-        
+
         Args:
             filepath: Path to the log file to analyze
             parser: Optional parser name to use (auto-detects if not specified)
             max_errors: Maximum error entries to collect for analysis
-            
+
         Returns:
             TriageResult with AI-powered analysis
-            
+
         Raises:
             AIError: If AI analysis fails
             ValueError: If log format cannot be detected
             FileNotFoundError: If log file doesn't exist
         """
+        logger.info(f"Starting triage for {filepath}")
+        logger.debug(f"Parameters: parser={parser}, max_errors={max_errors}")
+        start_time = time.time()
+
         # First, analyze the log file
+        logger.debug("Performing log analysis...")
         analysis_result = self._analyzer.analyze(
             filepath,
             parser=parser,
             max_errors=max_errors,
         )
-        
+
         # Build the prompt
         prompt = build_triage_prompt(analysis_result)
-        
+
         # Get AI provider and analyze
         provider = self._get_provider()
-        
+
         # Sanitize the prompt content
+        logger.debug("Sanitizing prompt content (PII redaction)")
         prompt = provider.sanitize_log_content(prompt)
-        
+
         # Send to AI
+        logger.debug(f"Sending prompt to AI provider: {provider.name}")
         response = provider.analyze(prompt, system_prompt=TRIAGE_SYSTEM_PROMPT)
-        
+        logger.debug(f"Received AI response: {response.latency_ms}ms latency")
+
         # Parse the response
         triage_result = parse_triage_response(response, analysis_result)
-        
+
+        elapsed = time.time() - start_time
+        logger.info(f"Triage completed in {elapsed:.2f}s: "
+                   f"{len(triage_result.issues)} issues identified, "
+                   f"severity={triage_result.overall_severity.value}, "
+                   f"confidence={triage_result.confidence:.2f}")
+
         return triage_result
     
     def triage_from_result(self, result: AnalysisResult) -> TriageResult:

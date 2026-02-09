@@ -5,10 +5,12 @@ Provides automatic format detection and comprehensive log analysis
 including error detection, pattern recognition, and statistics.
 """
 
-from collections import Counter, defaultdict
+import logging
+import time
+from collections import Counter
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
-from typing import Iterator, Optional
+from typing import Iterator, Optional, Any
 
 from .parsers import (
     BaseParser,
@@ -20,6 +22,10 @@ from .parsers import (
     SyslogParser,
 )
 from .reader import LogReader
+from .constants import DEFAULT_SAMPLE_SIZE, DEFAULT_MAX_ERRORS
+
+
+logger = logging.getLogger(__name__)
 
 
 # Registry of all available parsers
@@ -100,62 +106,79 @@ class LogAnalyzer:
         """
         self.parsers = parsers or AVAILABLE_PARSERS
     
-    def detect_format(self, filepath: str, sample_size: int = 100) -> Optional[BaseParser]:
+    def detect_format(self, filepath: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> Optional[BaseParser]:
         """
         Auto-detect the log format by sampling lines.
-        
+
         Args:
             filepath: Path to log file
             sample_size: Number of lines to sample for detection
-            
+
         Returns:
             Best matching parser, or None if no format detected
         """
+        logger.debug(f"Detecting format for {filepath} (sample_size={sample_size})")
+        start_time = time.time()
+
         reader = LogReader(filepath)
-        
+
         # Count successful parses per parser
         parse_counts = Counter()
-        
+
         for i, line in enumerate(reader.read_lines()):
             if i >= sample_size:
                 break
-            
+
             for parser in self.parsers:
                 if parser.can_parse(line):
                     result = parser.parse(line)
                     if result:
                         parse_counts[parser.name] += 1
-        
+
+        elapsed = time.time() - start_time
+
         if not parse_counts:
+            logger.warning(f"No format detected for {filepath} after sampling {sample_size} lines")
             return None
-        
+
         # Return parser with most successful parses
         best_format = parse_counts.most_common(1)[0][0]
+        logger.info(f"Detected format '{best_format}' for {filepath} "
+                   f"(parse_counts={dict(parse_counts)}, elapsed={elapsed:.2f}s)")
+
         for parser in self.parsers:
             if parser.name == best_format:
                 return parser
-        
+
         return None
     
-    def analyze(self, filepath: str, parser: BaseParser = None, 
-                max_errors: int = 100) -> AnalysisResult:
+    def analyze(self, filepath: str, parser: BaseParser = None,
+                max_errors: int = DEFAULT_MAX_ERRORS,
+                progress_callback: Optional[Any] = None) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
-        
+
         Args:
             filepath: Path to log file
             parser: Specific parser to use. Auto-detects if None.
             max_errors: Maximum number of errors/warnings to collect
-            
+            progress_callback: Optional callback for progress updates (Rich Progress task)
+
         Returns:
             AnalysisResult with all analysis data
         """
+        logger.info(f"Starting analysis of {filepath}")
+        logger.debug(f"Parameters: parser={parser.name if parser else 'auto'}, max_errors={max_errors}")
+        start_time = time.time()
+
         # Detect format if not specified
         if parser is None:
             parser = self.detect_format(filepath)
             if parser is None:
+                logger.error(f"Could not detect log format for {filepath}")
                 raise ValueError(f"Could not detect log format for: {filepath}")
-        
+
+        logger.debug(f"Using parser: {parser.name}")
         reader = LogReader(filepath)
         
         # Initialize counters
@@ -177,16 +200,20 @@ class LogAnalyzer:
         # Process each line
         for line in reader.read_lines():
             total_lines += 1
-            
+
+            # Update progress
+            if progress_callback and hasattr(progress_callback, 'update'):
+                progress_callback.update(advance=1)
+
             if not line.strip():
                 continue
-            
+
             entry = parser.parse(line)
-            
+
             if entry is None:
                 failed_lines += 1
                 continue
-            
+
             parsed_lines += 1
             
             # Count levels
@@ -218,7 +245,7 @@ class LogAnalyzer:
                 if len(warnings) < max_errors:
                     warnings.append(entry)
         
-        return AnalysisResult(
+        result = AnalysisResult(
             filepath=filepath,
             detected_format=parser.name,
             total_lines=total_lines,
@@ -233,6 +260,18 @@ class LogAnalyzer:
             top_errors=error_messages.most_common(10),
             status_codes=dict(status_codes),
         )
+
+        elapsed = time.time() - start_time
+        logger.info(f"Analysis completed in {elapsed:.2f}s: "
+                   f"{parsed_lines:,} lines parsed ({result.parse_success_rate:.1f}% success), "
+                   f"{failed_lines:,} failed, "
+                   f"{result.error_rate:.1f}% error rate, "
+                   f"throughput={parsed_lines/elapsed:.0f} lines/sec")
+        logger.debug(f"Level counts: {dict(level_counts)}")
+        logger.debug(f"Top sources: {len(source_counts)} unique sources")
+        logger.debug(f"Top errors: {len(error_messages)} unique error messages")
+
+        return result
     
     def parse_file(self, filepath: str, parser: BaseParser = None) -> Iterator[LogEntry]:
         """

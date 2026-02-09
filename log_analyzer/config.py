@@ -16,6 +16,7 @@ Security Notes:
     - Sensitive values are masked in string representations
 """
 
+import logging
 import os
 import stat
 import warnings
@@ -29,6 +30,9 @@ try:
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
+
+
+logger = logging.getLogger(__name__)
 
 
 # Default configuration directory and file
@@ -220,27 +224,29 @@ def check_config_permissions(path: Path) -> bool:
 def load_config(path: Optional[Path] = None) -> Config:
     """
     Load configuration from file and environment.
-    
+
     Args:
         path: Path to config file. Defaults to ~/.log-analyzer/config.yaml
-        
+
     Returns:
         Loaded Config object
     """
+    logger.debug(f"Loading configuration from {path or DEFAULT_CONFIG_FILE}")
     config = Config()
     config_path = path or DEFAULT_CONFIG_FILE
-    
+
     # Load from file if it exists and YAML is available
     if config_path.exists() and YAML_AVAILABLE:
+        logger.debug(f"Config file exists: {config_path}")
         check_config_permissions(config_path)
-        
+
         try:
             with open(config_path) as f:
                 data = yaml.safe_load(f) or {}
-            
+
             config.config_file = config_path
             config.default_provider = data.get("default_provider")
-            
+
             # Load provider configs
             providers_data = data.get("providers", {})
             for name, prov_data in providers_data.items():
@@ -253,68 +259,91 @@ def load_config(path: Optional[Path] = None) -> Config:
                             if k not in ("enabled", "model", "api_key")
                         },
                     )
-        except Exception as e:
+
+            logger.info(f"Loaded configuration from {config_path}: "
+                       f"default_provider={config.default_provider}, "
+                       f"providers={list(providers_data.keys())}")
+        except (OSError, IOError) as e:
+            logger.error(f"Failed to read config file {config_path}: {e}")
             warnings.warn(f"Error loading config from {config_path}: {e}")
-    
+        except yaml.YAMLError as e:
+            logger.error(f"Invalid YAML in config file {config_path}: {e}")
+            warnings.warn(f"Invalid YAML in {config_path}: {e}")
+        except Exception as e:
+            logger.error(f"Unexpected error loading config from {config_path}: {e}", exc_info=True)
+            warnings.warn(f"Error loading config from {config_path}: {e}")
+    elif config_path.exists() and not YAML_AVAILABLE:
+        logger.warning(f"Config file exists but PyYAML not installed: {config_path}")
+    else:
+        logger.debug(f"No config file found at {config_path}, using defaults")
+
     # Override default_provider from environment if set
     env_provider = os.environ.get(ENV_VARS["default_provider"])
     if env_provider:
+        logger.debug(f"Overriding default_provider from environment: {env_provider}")
         config.default_provider = env_provider
-    
+
     return config
 
 
 def save_config(config: Config, path: Optional[Path] = None) -> Path:
     """
     Save configuration to file.
-    
+
     Note: API keys are NOT saved to the file.
-    
+
     Args:
         config: Config object to save
         path: Path to save to. Defaults to ~/.log-analyzer/config.yaml
-        
+
     Returns:
         Path where config was saved
-        
+
     Raises:
         ImportError: If PyYAML is not installed
     """
     if not YAML_AVAILABLE:
+        logger.error("Attempted to save config but PyYAML not installed")
         raise ImportError(
             "PyYAML is required to save config. Run: pip install pyyaml"
         )
-    
+
     config_path = path or DEFAULT_CONFIG_FILE
-    
+    logger.info(f"Saving configuration to {config_path}")
+
     # Create directory if it doesn't exist
     config_path.parent.mkdir(parents=True, exist_ok=True)
-    
+
     # Write config
     with open(config_path, "w") as f:
         yaml.safe_dump(config.to_dict(), f, default_flow_style=False)
-    
+
+    logger.debug(f"Configuration written to {config_path}")
+
     # Set secure permissions (owner read/write only)
     try:
         config_path.chmod(0o600)
-    except OSError:
-        pass  # Ignore permission errors (e.g., on Windows)
-    
+        logger.debug(f"Set secure permissions (600) on {config_path}")
+    except OSError as e:
+        logger.warning(f"Could not set secure permissions on {config_path}: {e}")
+        # Ignore permission errors (e.g., on Windows)
+
     return config_path
 
 
 def get_config() -> Config:
     """
     Get the current configuration.
-    
+
     This is the main entry point for getting configuration.
     Loads from file and environment on first call.
-    
+
     Returns:
         Current Config object
     """
     global _config
     if _config is None:
+        logger.debug("First call to get_config(), loading configuration")
         _config = load_config()
     return _config
 
@@ -332,31 +361,38 @@ _config: Optional[Config] = None
 def get_provider_status() -> dict[str, dict]:
     """
     Get status of all known providers.
-    
+
     Returns:
         Dictionary with provider status information
     """
+    logger.debug("Getting status of all providers")
     config = get_config()
     status = {}
-    
+
     for provider in ["anthropic", "gemini", "ollama"]:
         provider_config = config.get_provider_config(provider)
         api_key = config.get_api_key(provider)
-        
+
         status[provider] = {
             "enabled": provider_config.enabled,
             "model": config.get_model(provider),
             "configured": bool(api_key) if provider != "ollama" else True,
             "api_key_display": mask_api_key(api_key) if provider != "ollama" else "N/A",
         }
-        
+
         # For Ollama, check if server is reachable
         if provider == "ollama":
             try:
                 from .ai_providers.ollama_provider import OllamaProvider
                 ollama = OllamaProvider()
                 status[provider]["server_available"] = ollama.is_available()
-            except Exception:
+                logger.debug(f"Ollama server availability: {status[provider]['server_available']}")
+            except ImportError as e:
+                logger.debug(f"Ollama provider not available (import error): {e}")
                 status[provider]["server_available"] = False
-    
+            except Exception as e:
+                logger.debug(f"Error checking Ollama availability: {e}")
+                status[provider]["server_available"] = False
+
+    logger.debug(f"Provider status: {[(k, v['configured']) for k, v in status.items()]}")
     return status
