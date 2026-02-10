@@ -500,6 +500,12 @@ def formats():
     table.add_column("Description")
     
     descriptions = {
+        'aws_cloudwatch': 'AWS CloudWatch Logs (JSON and plain text)',
+        'gcp_logging': 'Google Cloud Logging (Stackdriver format)',
+        'azure_monitor': 'Azure Monitor and Application Insights logs',
+        'docker_json': 'Docker container logs (JSON format)',
+        'kubernetes': 'Kubernetes pod logs with metadata',
+        'containerd': 'containerd CRI logs',
         'apache_access': 'Apache Combined Log Format (access.log)',
         'apache_error': 'Apache Error Log Format (error.log)',
         'nginx_access': 'nginx Access Log Format',

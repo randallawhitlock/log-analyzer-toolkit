@@ -1,0 +1,12 @@
+{"log":"Starting timer...\n","stream":"stdout","time":"2018-05-17T21:25:25.140994702Z"}
+{"log":"2018-05-17 21:25:26.141379027 +0000 UTC m=+1.001544440 \n","stream":"stdout","time":"2018-05-17T21:25:26.141762383Z"}
+2020-01-01T00:00:00.000000000Z stdout F [INFO] Pod ready
+2020-01-01T00:00:01.000000000Z stderr F [ERROR] Health check failed
+2020-01-01T00:00:02.000000000Z stdout P Partial line that continues
+2020-01-01T00:00:02.000000000Z stdout F  on the next line
+2020-01-01T00:00:03.000000000Z stdout F [INFO] Application started successfully
+2020-01-01T00:00:04.000000000Z stderr F [WARN] Memory usage above threshold: 85%
+2020-01-01T00:00:05.000000000Z stdout F {"level":"info","msg":"Service listening on port 8080","timestamp":"2020-01-01T00:00:05Z"}
+2020-01-01T00:00:06.000000000Z stderr F panic: runtime error
+2020-01-01T00:00:07.000000000Z stdout F [DEBUG] Cache hit for key: session-abc123
+2020-01-01T00:00:08.000000000Z stderr F Error: connection refused (127.0.0.1:5432)

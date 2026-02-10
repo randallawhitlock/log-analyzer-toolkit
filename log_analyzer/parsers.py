@@ -8,13 +8,20 @@ nginx, JSON, and syslog.
 import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
-from datetime import datetime
+from datetime import datetime, timezone
 from typing import Optional, Any
+import json
 
 
 __all__ = [
     "LogEntry",
     "BaseParser",
+    "AWSCloudWatchParser",
+    "GCPCloudLoggingParser",
+    "AzureMonitorParser",
+    "DockerJSONParser",
+    "KubernetesParser",
+    "ContainerdParser",
     "ApacheAccessParser",
     "ApacheErrorParser",
     "NginxAccessParser",
@@ -61,36 +68,810 @@ class LogEntry:
             self.metadata = {}
 
 
+# Cloud provider severity mapping
+GCP_SEVERITY_MAP = {
+    'DEFAULT': 'INFO',
+    'DEBUG': 'DEBUG',
+    'INFO': 'INFO',
+    'NOTICE': 'INFO',
+    'WARNING': 'WARNING',
+    'ERROR': 'ERROR',
+    'CRITICAL': 'CRITICAL',
+    'ALERT': 'CRITICAL',
+    'EMERGENCY': 'CRITICAL',
+}
+
+# Azure severity level mapping (numeric)
+AZURE_SEVERITY_MAP = {
+    0: 'DEBUG',    # Verbose
+    1: 'INFO',     # Information
+    2: 'WARNING',  # Warning
+    3: 'ERROR',    # Error
+    4: 'CRITICAL', # Critical
+}
+
+
+def parse_cloud_timestamp(timestamp_str: str) -> Optional[datetime]:
+    """
+    Parse cloud provider timestamps (ISO8601, RFC3339, Unix ms).
+
+    Supports:
+    - ISO8601: 2020-01-01T00:00:00Z, 2020-01-01T00:00:00.000Z
+    - RFC3339Nano: 2020-01-01T00:00:00.000000000Z
+    - Unix milliseconds: 1577836800000
+
+    Args:
+        timestamp_str: Timestamp string to parse
+
+    Returns:
+        datetime object with UTC timezone, or None if parsing fails
+    """
+    if not timestamp_str:
+        return None
+
+    # Try Unix milliseconds (AWS CloudWatch format)
+    if timestamp_str.isdigit():
+        try:
+            return datetime.fromtimestamp(int(timestamp_str) / 1000, tz=timezone.utc)
+        except (ValueError, OSError):
+            pass
+
+    # Handle RFC3339Nano (nanoseconds) - truncate to microseconds
+    if '.' in timestamp_str and 'Z' in timestamp_str:
+        try:
+            # Split into date-time and fractional seconds
+            parts = timestamp_str.split('.')
+            if len(parts) == 2:
+                fractional = parts[1].rstrip('Z')
+                # Truncate to 6 digits (microseconds) if longer
+                if len(fractional) > 6:
+                    fractional = fractional[:6]
+                # Reconstruct timestamp
+                timestamp_str = f"{parts[0]}.{fractional}Z"
+        except (ValueError, IndexError):
+            pass
+
+    # Try ISO8601/RFC3339 formats
+    formats = [
+        '%Y-%m-%dT%H:%M:%SZ',
+        '%Y-%m-%dT%H:%M:%S.%fZ',
+        '%Y-%m-%dT%H:%M:%S%z',
+    ]
+
+    for fmt in formats:
+        try:
+            dt = datetime.strptime(timestamp_str, fmt)
+            # Ensure timezone aware
+            if dt.tzinfo is None:
+                dt = dt.replace(tzinfo=timezone.utc)
+            return dt
+        except ValueError:
+            continue
+
+    return None
+
+
+def extract_level_from_message(message: str) -> Optional[str]:
+    """
+    Extract log level from message content using common patterns.
+
+    Args:
+        message: Message text to search
+
+    Returns:
+        Extracted level (CRITICAL, ERROR, WARNING, INFO, DEBUG) or None
+    """
+    if not message:
+        return None
+
+    message_upper = message.upper()
+
+    # Check for common level indicators
+    if any(indicator in message_upper for indicator in ['FATAL', 'CRITICAL', 'CRIT']):
+        return 'CRITICAL'
+    if 'ERROR' in message_upper or 'ERR' in message_upper:
+        return 'ERROR'
+    if any(indicator in message_upper for indicator in ['WARN', 'WARNING']):
+        return 'WARNING'
+    if 'INFO' in message_upper:
+        return 'INFO'
+    if 'DEBUG' in message_upper:
+        return 'DEBUG'
+
+    # Check for bracketed levels like [ERROR] or [INFO]
+    level_match = re.search(r'\[(CRITICAL|ERROR|WARN|WARNING|INFO|DEBUG)\]', message_upper)
+    if level_match:
+        level = level_match.group(1)
+        return 'WARNING' if level == 'WARN' else level
+
+    return None
+
+
 class BaseParser(ABC):
     """Abstract base class for log format parsers."""
-    
+
     name: str = "base"
-    
+
     @abstractmethod
     def parse(self, line: str) -> Optional[LogEntry]:
         """
         Parse a single log line.
-        
+
         Args:
             line: Raw log line to parse
-            
+
         Returns:
             LogEntry if parsing succeeds, None if line doesn't match format
         """
         pass
-    
+
     @abstractmethod
     def can_parse(self, line: str) -> bool:
         """
         Check if this parser can handle the given line.
-        
+
         Args:
             line: Raw log line to check
-            
+
         Returns:
             True if this parser can parse the line
         """
         pass
+
+
+# ============================================================================
+# Cloud Provider Parsers
+# ============================================================================
+
+class AWSCloudWatchParser(BaseParser):
+    """
+    Parser for AWS CloudWatch Logs format.
+
+    Supports both JSON batch format and plain text export format.
+
+    JSON format example:
+        {"messageType":"DATA_MESSAGE","logGroup":"/aws/lambda/func",
+         "logEvents":[{"timestamp":1421116133213,"message":"Hello"}]}
+
+    Plain text export format example:
+        2020-01-01T00:00:00.000Z [INFO] Application started
+    """
+
+    name = "aws_cloudwatch"
+
+    # JSON keys that identify CloudWatch logs
+    JSON_KEYS = {'logEvents', 'logGroup', 'logStream'}
+
+    # Plain text pattern for CloudWatch exports
+    PATTERN = re.compile(
+        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+'
+        r'(?:\[(?P<level>\w+)\]\s+)?'
+        r'(?P<message>.+)$'
+    )
+
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches AWS CloudWatch format."""
+        line = line.strip()
+
+        # Try JSON format first
+        if line.startswith('{'):
+            try:
+                data = json.loads(line)
+                return any(key in data for key in self.JSON_KEYS)
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # Try plain text format
+        return bool(self.PATTERN.match(line))
+
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse AWS CloudWatch log line."""
+        line = line.strip()
+
+        # Try JSON format first
+        if line.startswith('{'):
+            try:
+                data = json.loads(line)
+                if 'logEvents' in data:
+                    # Batch format - parse first event
+                    events = data.get('logEvents', [])
+                    if events:
+                        return self._parse_event(
+                            events[0],
+                            log_group=data.get('logGroup'),
+                            log_stream=data.get('logStream')
+                        )
+                elif 'message' in data:
+                    # Single event format
+                    return self._parse_event(data)
+            except (json.JSONDecodeError, ValueError, KeyError):
+                pass
+
+        # Try plain text format
+        match = self.PATTERN.match(line)
+        if match:
+            data = match.groupdict()
+            timestamp = parse_cloud_timestamp(data['timestamp'])
+            level = data.get('level') or extract_level_from_message(data['message'])
+
+            return LogEntry(
+                raw=line,
+                timestamp=timestamp,
+                level=level.upper() if level else 'INFO',
+                message=data['message'],
+                metadata={'parser_type': 'aws_cloudwatch_text'}
+            )
+
+        return None
+
+    def _parse_event(self, event: dict, log_group=None, log_stream=None) -> Optional[LogEntry]:
+        """Parse CloudWatch event object."""
+        message = event.get('message', '')
+        timestamp_ms = event.get('timestamp')
+
+        # Parse timestamp (Unix milliseconds)
+        timestamp = None
+        if timestamp_ms:
+            timestamp = parse_cloud_timestamp(str(timestamp_ms))
+
+        # Extract level from message
+        level = extract_level_from_message(message) or 'INFO'
+
+        # Build metadata
+        metadata = {'parser_type': 'aws_cloudwatch_json'}
+        if log_group:
+            metadata['log_group'] = log_group
+        if log_stream:
+            metadata['log_stream'] = log_stream
+
+        # Extract request ID if present (Lambda format)
+        request_id_match = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', message)
+        if request_id_match:
+            metadata['request_id'] = request_id_match.group(1)
+
+        return LogEntry(
+            timestamp=timestamp,
+            level=level,
+            message=message.strip(),
+            source=log_group,
+            metadata=metadata
+        )
+
+
+class GCPCloudLoggingParser(BaseParser):
+    """
+    Parser for Google Cloud Logging (Stackdriver) format.
+
+    JSON format with fields like severity, timestamp, textPayload/jsonPayload,
+    resource, labels, logName, etc.
+
+    Example:
+        {"timestamp":"2020-01-01T00:00:00Z","severity":"ERROR",
+         "textPayload":"Connection failed","resource":{"type":"gce_instance"}}
+    """
+
+    name = "gcp_logging"
+
+    # Required/identifying fields for GCP logs
+    GCP_KEYS = {'severity', 'timestamp'}
+
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches GCP Cloud Logging format."""
+        line = line.strip()
+        if not line.startswith('{'):
+            return False
+
+        try:
+            data = json.loads(line)
+            # Must have severity and timestamp fields
+            return all(key in data for key in self.GCP_KEYS)
+        except (json.JSONDecodeError, ValueError):
+            return False
+
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse GCP Cloud Logging log line."""
+        try:
+            data = json.loads(line.strip())
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+        # Validate required fields (must have both severity and timestamp)
+        if 'severity' not in data or 'timestamp' not in data:
+            return None
+
+        # Extract timestamp
+        timestamp_str = data.get('timestamp')
+        timestamp = parse_cloud_timestamp(timestamp_str) if timestamp_str else None
+
+        # Extract severity and map to standard levels
+        severity = data.get('severity', 'INFO').upper()
+        level = GCP_SEVERITY_MAP.get(severity, severity)
+
+        # Extract message from textPayload or jsonPayload
+        message = ''
+        if 'textPayload' in data:
+            message = data['textPayload']
+        elif 'jsonPayload' in data:
+            payload = data['jsonPayload']
+            # Try to get 'message' or 'msg' field, or serialize the whole payload
+            if isinstance(payload, dict):
+                message = payload.get('message') or payload.get('msg') or json.dumps(payload)
+            else:
+                message = str(payload)
+
+        # Extract source from resource.type
+        source = None
+        resource = data.get('resource', {})
+        if isinstance(resource, dict):
+            source = resource.get('type')
+
+        # Build metadata
+        metadata = {'parser_type': 'gcp_logging'}
+
+        # Add resource labels
+        if isinstance(resource, dict) and 'labels' in resource:
+            resource_labels = resource['labels']
+            if isinstance(resource_labels, dict):
+                metadata['resource_labels'] = resource_labels
+                # Extract common fields
+                if 'pod_name' in resource_labels:
+                    metadata['pod_name'] = resource_labels['pod_name']
+                if 'namespace_name' in resource_labels:
+                    metadata['namespace'] = resource_labels['namespace_name']
+                if 'instance_id' in resource_labels:
+                    metadata['instance_id'] = resource_labels['instance_id']
+
+        # Add log-level labels
+        if 'labels' in data and isinstance(data['labels'], dict):
+            metadata['labels'] = data['labels']
+
+        # Add logName
+        if 'logName' in data:
+            metadata['log_name'] = data['logName']
+
+        # Add trace/span IDs if present
+        if 'trace' in data:
+            metadata['trace'] = data['trace']
+        if 'spanId' in data:
+            metadata['span_id'] = data['spanId']
+
+        return LogEntry(
+            timestamp=timestamp,
+            level=level,
+            message=message.strip() if message else '',
+            source=source,
+            metadata=metadata
+        )
+
+
+class AzureMonitorParser(BaseParser):
+    """
+    Parser for Azure Monitor and Application Insights logs.
+
+    Supports both string-based and numeric severity levels.
+
+    Application Insights format:
+        {"time":"2020-01-01T00:00:00.000Z","level":"Error","message":"Failed"}
+
+    Log Analytics format:
+        {"TimeGenerated":"2020-01-01T00:00:00.000Z","Computer":"vm-01",
+         "SeverityLevel":3,"Message":"Service unavailable"}
+    """
+
+    name = "azure_monitor"
+
+    # Identifying field combinations
+    TIME_FIELDS = {'time', 'TimeGenerated'}
+    LEVEL_FIELDS = {'level', 'SeverityLevel'}
+
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Azure Monitor format."""
+        line = line.strip()
+
+        # Handle JSON array format
+        if line.startswith('['):
+            try:
+                data = json.loads(line)
+                if isinstance(data, list) and data:
+                    # Check first element
+                    item = data[0]
+                    return self._has_azure_fields(item)
+            except (json.JSONDecodeError, ValueError):
+                return False
+
+        # Handle single JSON object
+        if line.startswith('{'):
+            try:
+                data = json.loads(line)
+                return self._has_azure_fields(data)
+            except (json.JSONDecodeError, ValueError):
+                return False
+
+        return False
+
+    def _has_azure_fields(self, data: dict) -> bool:
+        """Check if data has Azure Monitor identifying fields."""
+        if not isinstance(data, dict):
+            return False
+        # Must have a time field and either level or SeverityLevel
+        has_time = any(field in data for field in self.TIME_FIELDS)
+        has_level = any(field in data for field in self.LEVEL_FIELDS)
+        return has_time and has_level
+
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse Azure Monitor log line."""
+        line = line.strip()
+
+        # Handle JSON array (take first element)
+        if line.startswith('['):
+            try:
+                data = json.loads(line)
+                if isinstance(data, list) and data:
+                    return self._parse_entry(data[0])
+            except (json.JSONDecodeError, ValueError):
+                return None
+
+        # Handle single JSON object
+        if line.startswith('{'):
+            try:
+                data = json.loads(line)
+                return self._parse_entry(data)
+            except (json.JSONDecodeError, ValueError):
+                return None
+
+        return None
+
+    def _parse_entry(self, data: dict) -> Optional[LogEntry]:
+        """Parse single Azure Monitor entry."""
+        if not isinstance(data, dict):
+            return None
+
+        # Extract timestamp (try both field names)
+        timestamp_str = data.get('time') or data.get('TimeGenerated')
+        timestamp = parse_cloud_timestamp(timestamp_str) if timestamp_str else None
+
+        # Extract level (string or numeric)
+        level = 'INFO'
+        if 'level' in data:
+            # String level (Application Insights)
+            level_str = data['level']
+            if isinstance(level_str, str):
+                level_upper = level_str.upper()
+                if level_upper == 'ERROR':
+                    level = 'ERROR'
+                elif level_upper in ('WARN', 'WARNING'):
+                    level = 'WARNING'
+                elif level_upper in ('INFO', 'INFORMATION'):
+                    level = 'INFO'
+                elif level_upper in ('CRITICAL', 'FATAL'):
+                    level = 'CRITICAL'
+                elif level_upper == 'DEBUG' or level_upper == 'VERBOSE':
+                    level = 'DEBUG'
+        elif 'SeverityLevel' in data:
+            # Numeric level (Log Analytics)
+            severity_num = data['SeverityLevel']
+            if isinstance(severity_num, int):
+                level = AZURE_SEVERITY_MAP.get(severity_num, 'INFO')
+
+        # Extract message (try different field names)
+        message = data.get('message') or data.get('Message') or ''
+
+        # Extract source (Computer field or category)
+        source = data.get('Computer') or data.get('category')
+
+        # Build metadata
+        metadata = {'parser_type': 'azure_monitor'}
+
+        # Add operation name if present
+        if 'operationName' in data:
+            metadata['operation'] = data['operationName']
+
+        # Add category
+        if 'category' in data:
+            metadata['category'] = data['category']
+
+        # Add properties/AdditionalContext
+        if 'properties' in data and isinstance(data['properties'], dict):
+            metadata['properties'] = data['properties']
+        if 'AdditionalContext' in data and isinstance(data['AdditionalContext'], dict):
+            metadata['additional_context'] = data['AdditionalContext']
+
+        return LogEntry(
+            timestamp=timestamp,
+            level=level,
+            message=message.strip() if message else '',
+            source=source,
+            metadata=metadata
+        )
+
+
+# ============================================================================
+# Container Runtime Parsers
+# ============================================================================
+
+class DockerJSONParser(BaseParser):
+    """
+    Parser for Docker container JSON logs.
+
+    Format: {"log":"message\\n","stream":"stdout","time":"2019-01-01T11:11:11.111111111Z"}
+
+    The log field contains the actual message, stream is stdout/stderr,
+    and time is RFC3339Nano timestamp.
+    """
+
+    name = "docker_json"
+
+    # Required fields for Docker JSON logs
+    DOCKER_KEYS = {'log', 'stream', 'time'}
+
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Docker JSON log format."""
+        line = line.strip()
+        if not line.startswith('{'):
+            return False
+
+        try:
+            data = json.loads(line)
+            return all(key in data for key in self.DOCKER_KEYS)
+        except (json.JSONDecodeError, ValueError):
+            return False
+
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse Docker JSON log line."""
+        try:
+            data = json.loads(line.strip())
+        except (json.JSONDecodeError, ValueError):
+            return None
+
+        # Extract fields
+        log_message = data.get('log', '').rstrip('\n')
+        stream = data.get('stream', 'stdout')
+        time_str = data.get('time')
+
+        # Parse timestamp
+        timestamp = parse_cloud_timestamp(time_str) if time_str else None
+
+        # Extract level from message content
+        level = extract_level_from_message(log_message)
+
+        # Default level based on stream if not found in message
+        if not level:
+            level = 'WARNING' if stream == 'stderr' else 'INFO'
+
+        # Build metadata
+        metadata = {
+            'parser_type': 'docker_json',
+            'stream': stream
+        }
+
+        return LogEntry(
+            timestamp=timestamp,
+            level=level,
+            message=log_message,
+            source=stream,
+            metadata=metadata
+        )
+
+
+class KubernetesParser(BaseParser):
+    """
+    Parser for Kubernetes pod logs.
+
+    Supports both CRI format and Docker JSON format:
+    - CRI: "2020-01-01T00:00:00.000000000Z stdout F [INFO] Message"
+    - JSON: {"log":"message\\n","stream":"stdout","time":"2020-01-01T00:00:00Z"}
+
+    CRI format: TIMESTAMP STREAM FLAG MESSAGE
+    - STREAM: stdout or stderr
+    - FLAG: F (full line) or P (partial line)
+    """
+
+    name = "kubernetes"
+
+    # CRI format pattern
+    CRI_PATTERN = re.compile(
+        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+'
+        r'(?P<stream>stdout|stderr)\s+'
+        r'(?P<flag>[FP])\s+'
+        r'(?P<message>.*)$'
+    )
+
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches Kubernetes log format."""
+        line = line.strip()
+
+        # Try CRI format
+        if self.CRI_PATTERN.match(line):
+            return True
+
+        # Try Docker JSON format (also used by Kubernetes)
+        if line.startswith('{'):
+            try:
+                data = json.loads(line)
+                # Must have log, stream, and time fields
+                return all(key in data for key in ['log', 'stream', 'time'])
+            except (json.JSONDecodeError, ValueError):
+                return False
+
+        return False
+
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse Kubernetes log line."""
+        line = line.strip()
+
+        # Try CRI format first
+        match = self.CRI_PATTERN.match(line)
+        if match:
+            data = match.groupdict()
+
+            timestamp = parse_cloud_timestamp(data['timestamp'])
+            stream = data['stream']
+            flag = data['flag']
+            message = data['message']
+
+            # Extract level from message
+            level = extract_level_from_message(message)
+
+            # Default based on stream if not found
+            if not level:
+                level = 'WARNING' if stream == 'stderr' else 'INFO'
+
+            metadata = {
+                'parser_type': 'kubernetes_cri',
+                'stream': stream,
+                'flag': flag,  # F=full, P=partial
+            }
+
+            return LogEntry(
+                timestamp=timestamp,
+                level=level,
+                message=message,
+                source=stream,
+                metadata=metadata
+            )
+
+        # Try Docker JSON format
+        if line.startswith('{'):
+            try:
+                data = json.loads(line)
+                if all(key in data for key in ['log', 'stream', 'time']):
+                    log_message = data['log'].rstrip('\n')
+                    stream = data['stream']
+                    time_str = data['time']
+
+                    timestamp = parse_cloud_timestamp(time_str)
+                    level = extract_level_from_message(log_message)
+
+                    if not level:
+                        level = 'WARNING' if stream == 'stderr' else 'INFO'
+
+                    metadata = {
+                        'parser_type': 'kubernetes_json',
+                        'stream': stream
+                    }
+
+                    return LogEntry(
+                        timestamp=timestamp,
+                        level=level,
+                        message=log_message,
+                        source=stream,
+                        metadata=metadata
+                    )
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        return None
+
+
+class ContainerdParser(BaseParser):
+    """
+    Parser for containerd CRI logs.
+
+    Format: TIMESTAMP STREAM FLAG MESSAGE
+
+    Example text: "2020-01-01T00:00:00.000000000Z stdout F [INFO] Service started"
+    Example with JSON message:
+        "2020-01-01T00:00:00.000000000Z stdout F {"level":"info","msg":"Started"}"
+    """
+
+    name = "containerd"
+
+    # CRI format pattern (same as Kubernetes, but containerd-specific)
+    CRI_PATTERN = re.compile(
+        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+'
+        r'(?P<stream>stdout|stderr)\s+'
+        r'(?P<flag>[FP])\s+'
+        r'(?P<message>.*)$'
+    )
+
+    def can_parse(self, line: str) -> bool:
+        """Check if line matches containerd CRI log format."""
+        line = line.strip()
+
+        # CRI format with optional JSON message
+        match = self.CRI_PATTERN.match(line)
+        if match:
+            # This is CRI format - could be containerd or kubernetes
+            # Containerd logs often have JSON payloads or [INFO] style messages
+            message = match.group('message')
+            # Heuristic: if message looks like structured JSON or has component field,
+            # likely containerd. Otherwise, might be generic CRI.
+            if message.strip().startswith('{'):
+                try:
+                    data = json.loads(message.strip())
+                    # Common containerd JSON fields
+                    if any(k in data for k in ['component', 'level', 'msg']):
+                        return True
+                except (json.JSONDecodeError, ValueError):
+                    pass
+            # Also match if it has [INFO] style prefix or specific patterns
+            if '[INFO]' in message or 'plugin/' in message or 'component' in message:
+                return True
+
+        return False
+
+    def parse(self, line: str) -> Optional[LogEntry]:
+        """Parse containerd CRI log line."""
+        line = line.strip()
+
+        match = self.CRI_PATTERN.match(line)
+        if not match:
+            return None
+
+        data = match.groupdict()
+        timestamp = parse_cloud_timestamp(data['timestamp'])
+        stream = data['stream']
+        flag = data['flag']
+        message = data['message']
+
+        level = None
+        source = None
+        metadata = {
+            'parser_type': 'containerd_cri',
+            'stream': stream,
+            'flag': flag,
+        }
+
+        # Try to parse message as JSON
+        if message.strip().startswith('{'):
+            try:
+                json_msg = json.loads(message.strip())
+                if isinstance(json_msg, dict):
+                    # Extract level from JSON
+                    if 'level' in json_msg:
+                        level_str = json_msg['level'].upper()
+                        if level_str in ['INFO', 'DEBUG', 'WARN', 'WARNING', 'ERROR', 'CRITICAL']:
+                            level = 'WARNING' if level_str == 'WARN' else level_str
+
+                    # Extract component as source
+                    if 'component' in json_msg:
+                        source = json_msg['component']
+                        metadata['component'] = json_msg['component']
+
+                    # Use 'msg' field as message if present
+                    if 'msg' in json_msg:
+                        message = json_msg['msg']
+
+                    # Store full JSON in metadata
+                    metadata['json_data'] = json_msg
+            except (json.JSONDecodeError, ValueError):
+                pass
+
+        # If level not found in JSON, extract from message text
+        if not level:
+            level = extract_level_from_message(message)
+
+        # Default level based on stream if still not found
+        if not level:
+            level = 'WARNING' if stream == 'stderr' else 'INFO'
+
+        return LogEntry(
+            timestamp=timestamp,
+            level=level,
+            message=message.strip(),
+            source=source or stream,
+            metadata=metadata
+        )
 
 
 class ApacheAccessParser(BaseParser):

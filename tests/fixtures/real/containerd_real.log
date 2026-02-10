@@ -1,0 +1,12 @@
+2020-01-10T18:10:40.01576219Z stdout F [INFO] plugin/reload: Running configuration MD5 = 4665410bf21c8b272fcfd562c482cb82
+{"log":"[INFO] plugin/reload: Running configuration MD5 = 4665410bf21c8b272fcfd562c482cb82\n","stream":"stdout","time":"2020-01-10T17:22:50.838559221Z"}
+2020-01-01T00:00:00.000000000Z stdout F {"level":"info","msg":"Service started","component":"api"}
+2020-01-01T00:00:01.000000000Z stderr P Error: connection failed
+2020-01-01T00:00:01.000000000Z stderr F  to database server
+2020-01-01T00:00:02.000000000Z stdout F {"level":"debug","msg":"Processing request","component":"handler","request_id":"abc-123"}
+2020-01-01T00:00:03.000000000Z stderr F [ERROR] Failed to bind to port 8080
+2020-01-01T00:00:04.000000000Z stdout F {"level":"warn","msg":"High memory usage","component":"monitor","memory_mb":1024}
+2020-01-01T00:00:05.000000000Z stdout F Container initialization complete
+2020-01-01T00:00:06.000000000Z stderr F panic: runtime error: index out of range
+2020-01-01T00:00:07.000000000Z stdout F {"level":"info","msg":"Shutdown signal received","component":"main"}
+2020-01-01T00:00:08.000000000Z stdout F [INFO] Cleanup completed successfully

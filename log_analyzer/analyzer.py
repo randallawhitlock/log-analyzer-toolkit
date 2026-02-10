@@ -18,6 +18,12 @@ from typing import Iterator, Optional, Any
 from .parsers import (
     BaseParser,
     LogEntry,
+    AWSCloudWatchParser,
+    GCPCloudLoggingParser,
+    AzureMonitorParser,
+    DockerJSONParser,
+    KubernetesParser,
+    ContainerdParser,
     ApacheAccessParser,
     ApacheErrorParser,
     NginxAccessParser,
@@ -55,6 +61,17 @@ logger = logging.getLogger(__name__)
 
 # Registry of all available parsers (specific formats only, no fallback)
 AVAILABLE_PARSERS = [
+    # Cloud provider parsers (check first - highly structured)
+    AWSCloudWatchParser(),
+    GCPCloudLoggingParser(),
+    AzureMonitorParser(),
+
+    # Container runtime parsers
+    DockerJSONParser(),
+    KubernetesParser(),
+    ContainerdParser(),
+
+    # Web server and application parsers
     ApacheAccessParser(),
     ApacheErrorParser(),
     NginxAccessParser(),

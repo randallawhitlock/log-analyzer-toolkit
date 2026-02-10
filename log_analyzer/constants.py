@@ -49,3 +49,7 @@ DEFAULT_ANOMALY_THRESHOLD = 3.0  # Z-score threshold for anomaly detection
 DEFAULT_BURST_THRESHOLD = 2.0  # Standard deviations above mean for burst detection
 DEFAULT_SIMILARITY_THRESHOLD = 0.8  # Similarity threshold for message clustering
 MAX_ANALYTICS_ENTRIES = 100_000  # Maximum log entries to process for analytics (memory limit)
+
+# Cloud and container log format identifiers
+CLOUD_FORMATS = ['aws_cloudwatch', 'gcp_logging', 'azure_monitor']
+CONTAINER_FORMATS = ['docker_json', 'kubernetes', 'containerd']

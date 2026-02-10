@@ -1,0 +1,10 @@
+{"log":"Log line is here\n","stream":"stdout","time":"2019-01-01T11:11:11.111111111Z"}
+{"log":"2020-01-01T00:00:00Z [INFO] Container initialized\n","stream":"stdout","time":"2020-01-01T00:00:00.000000000Z"}
+{"log":"2020-01-01T00:00:01Z [ERROR] Port binding failed\n","stream":"stderr","time":"2020-01-01T00:00:01.000000000Z"}
+{"log":"Starting nginx server...\n","stream":"stdout","time":"2020-01-01T00:00:02.123456789Z"}
+{"log":"[warn] worker process 1234 exited on signal 11\n","stream":"stderr","time":"2020-01-01T00:00:03.234567890Z"}
+{"log":"Connection established to database\n","stream":"stdout","time":"2020-01-01T00:00:04.345678901Z"}
+{"log":"ERROR: Failed to load configuration file\n","stream":"stderr","time":"2020-01-01T00:00:05.456789012Z"}
+{"log":"INFO: Application ready to accept connections\n","stream":"stdout","time":"2020-01-01T00:00:06.567890123Z"}
+{"log":"[2020-01-01 00:00:07] WARNING: Cache miss for key user:1234\n","stream":"stdout","time":"2020-01-01T00:00:07.678901234Z"}
+{"log":"panic: runtime error: invalid memory address\n","stream":"stderr","time":"2020-01-01T00:00:08.789012345Z"}

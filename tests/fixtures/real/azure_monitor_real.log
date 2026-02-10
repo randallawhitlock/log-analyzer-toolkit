@@ -1,0 +1,10 @@
+[{"Time":"2023-03-12T15:04:48.423211Z","Computer":"Computer1","AdditionalContext":{"InstanceName":"user1","TimeZone":"Pacific Time","Level":4,"CounterName":"AppMetric2","CounterValue":35.3}},{"Time":"2023-03-12T15:04:48.794972Z","Computer":"Computer2","AdditionalContext":{"InstanceName":"user2","TimeZone":"Central Time","Level":3,"CounterName":"AppMetric2","CounterValue":43.5}}]
+{"time":"2020-01-01T00:00:00.000Z","level":"Error","category":"ApplicationInsights","operationName":"MyApp/ProcessRequest","properties":{"prop1":"value1"},"message":"Request processing failed"}
+{"time":"2020-01-01T00:00:01.000Z","level":"Information","category":"ApplicationInsights","operationName":"MyApp/HealthCheck","message":"Application healthy"}
+{"TimeGenerated":"2020-01-01T00:00:02.000Z","Computer":"vm-01","SeverityLevel":3,"Message":"Service unavailable"}
+{"TimeGenerated":"2020-01-01T00:00:03.000Z","Computer":"vm-02","SeverityLevel":2,"Message":"High CPU usage detected"}
+{"time":"2020-01-01T00:00:04.000Z","level":"Warning","category":"Security","message":"Failed login attempt from 192.168.1.100"}
+{"TimeGenerated":"2020-01-01T00:00:05.000Z","Computer":"vm-01","SeverityLevel":1,"Message":"Startup completed successfully"}
+{"time":"2020-01-01T00:00:06.000Z","level":"Error","category":"Database","operationName":"Query/Execute","message":"Query timeout: SELECT * FROM large_table"}
+{"TimeGenerated":"2020-01-01T00:00:07.000Z","Computer":"vm-03","SeverityLevel":0,"Message":"Debug: Processing batch 1234"}
+{"time":"2020-01-01T00:00:08.000Z","level":"Critical","category":"ApplicationInsights","message":"Out of memory exception"}
