@@ -28,7 +28,8 @@ logger = logging.getLogger(__name__)
 # Recommended models for log analysis
 OLLAMA_MODELS = {
     "llama3.3": "llama3.3:latest",           # Best overall for complex analysis
-    "llama3.2": "llama3.2:latest",           # Good balance
+    "llama3.2": "llama3.2:latest",
+    "llama3": "llama3:latest",           # Good balance
     "mistral": "mistral:latest",             # Fast and capable
     "mixtral": "mixtral:latest",             # Large mixture of experts model
     "codellama": "codellama:latest",         # Good for technical logs
@@ -36,7 +37,7 @@ OLLAMA_MODELS = {
 }
 
 # Default model - llama3.3 offers best quality for log analysis
-DEFAULT_MODEL = "llama3.3:latest"
+DEFAULT_MODEL = "llama3"
 DEFAULT_HOST = "http://localhost:11434"
 
 

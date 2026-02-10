@@ -52,9 +52,22 @@ ENV_VARS = {
 # Default model configurations (latest as of Feb 2026)
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-4-5-20250929",
-    "gemini": "gemini-3-pro",
-    "ollama": "llama3.3:latest",
+    "gemini": "gemini-3-pro-preview",
+    "ollama": "llama3",
 }
+
+
+__all__ = [
+    "ProviderConfig",
+    "Config",
+    "mask_api_key",
+    "check_config_permissions",
+    "load_config",
+    "save_config",
+    "get_config",
+    "reset_config",
+    "get_provider_status",
+]
 
 
 @dataclass

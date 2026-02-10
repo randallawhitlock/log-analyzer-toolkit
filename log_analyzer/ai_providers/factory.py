@@ -9,6 +9,7 @@ import logging
 from typing import Optional
 
 from .base import AIProvider, ProviderNotAvailableError
+from ..config import get_config
 
 
 logger = logging.getLogger(__name__)
@@ -159,9 +160,17 @@ def get_provider(
         return provider
     
     # Auto-detect best available provider
-    # Priority: Anthropic > Gemini > Ollama
+    # Priority: Configured default > Anthropic > Gemini > Ollama
     logger.debug("Auto-detecting best available provider...")
     priority_order = ["anthropic", "gemini", "ollama"]
+
+    # Check configured default first
+    default_provider = get_config().default_provider
+    if default_provider and default_provider in priority_order:
+        priority_order.remove(default_provider)
+        priority_order.insert(0, default_provider)
+        logger.debug(f"Using configured default provider priority: {default_provider}")
+
 
     for provider_name in priority_order:
         if provider_name not in _PROVIDER_REGISTRY:

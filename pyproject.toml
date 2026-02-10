@@ -8,7 +8,7 @@ version = "0.1.0"
 description = "A powerful command-line tool for parsing, analyzing, and troubleshooting log files"
 readme = "README.md"
 license = {text = "MIT"}
-requires-python = ">=3.10"
+requires-python = ">=3.9"
 authors = [
     {name = "Your Name", email = "your.email@example.com"}
 ]
@@ -32,12 +32,21 @@ classifiers = [
 dependencies = [
     "rich>=13.0.0",
     "click>=8.0.0",
+    "fastapi>=0.110.0",
+    "uvicorn[standard]>=0.27.0",
+    "sqlalchemy>=2.0.0",
+    "aiofiles>=23.2.0",
+    "python-multipart>=0.0.9",
+    "pydantic>=2.6.0",
+    "httpx>=0.27.0",
 ]
 
 [project.optional-dependencies]
 dev = [
     "pytest>=7.0.0",
     "pytest-cov>=4.0.0",
+    "pytest-asyncio>=0.23.0",
+    "httpx>=0.27.0",
 ]
 
 [project.scripts]

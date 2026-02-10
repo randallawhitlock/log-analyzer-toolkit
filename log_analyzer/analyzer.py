@@ -18,8 +18,21 @@ from .parsers import (
     ApacheAccessParser,
     ApacheErrorParser,
     NginxAccessParser,
+    NginxParser,
     JSONLogParser,
     SyslogParser,
+    AndroidParser,
+    JavaLogParser,
+    HDFSParser,
+    SupercomputerParser,
+    WindowsEventParser,
+    ProxifierParser,
+    HPCParser,
+    HealthAppParser,
+    OpenStackParser,
+    SquidParser,
+    UniversalFallbackParser,
+    CustomParserRegistry,
 )
 from .reader import LogReader
 from .constants import DEFAULT_SAMPLE_SIZE, DEFAULT_MAX_ERRORS
@@ -28,13 +41,35 @@ from .constants import DEFAULT_SAMPLE_SIZE, DEFAULT_MAX_ERRORS
 logger = logging.getLogger(__name__)
 
 
-# Registry of all available parsers
+# Registry of all available parsers (specific formats only, no fallback)
 AVAILABLE_PARSERS = [
     ApacheAccessParser(),
     ApacheErrorParser(),
     NginxAccessParser(),
+    NginxParser(),
     JSONLogParser(),
     SyslogParser(),
+    AndroidParser(),
+    JavaLogParser(),
+    HDFSParser(),
+    SupercomputerParser(),
+    WindowsEventParser(),
+    ProxifierParser(),
+    HPCParser(),
+    HealthAppParser(),
+    OpenStackParser(),
+    SquidParser(),
+]
+
+# Full parser list including universal fallback (for use when no format detected)
+ALL_PARSERS_WITH_FALLBACK = AVAILABLE_PARSERS + [UniversalFallbackParser()]
+
+
+__all__ = [
+    "AVAILABLE_PARSERS",
+    "ALL_PARSERS_WITH_FALLBACK",
+    "AnalysisResult",
+    "LogAnalyzer",
 ]
 
 
@@ -154,7 +189,8 @@ class LogAnalyzer:
     
     def analyze(self, filepath: str, parser: BaseParser = None,
                 max_errors: int = DEFAULT_MAX_ERRORS,
-                progress_callback: Optional[Any] = None) -> AnalysisResult:
+                progress_callback: Optional[Any] = None,
+                use_fallback: bool = True) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
 
@@ -163,20 +199,30 @@ class LogAnalyzer:
             parser: Specific parser to use. Auto-detects if None.
             max_errors: Maximum number of errors/warnings to collect
             progress_callback: Optional callback for progress updates (Rich Progress task)
+            use_fallback: If True, use universal fallback parser when no format detected.
+                         If False, raise ValueError when format cannot be detected.
 
         Returns:
             AnalysisResult with all analysis data
+
+        Note:
+            When fallback parser is used, the detected_format will be "universal"
+            and entries will have metadata['parser_type'] = 'fallback'.
         """
         logger.info(f"Starting analysis of {filepath}")
-        logger.debug(f"Parameters: parser={parser.name if parser else 'auto'}, max_errors={max_errors}")
+        logger.debug(f"Parameters: parser={parser.name if parser else 'auto'}, max_errors={max_errors}, use_fallback={use_fallback}")
         start_time = time.time()
 
         # Detect format if not specified
         if parser is None:
             parser = self.detect_format(filepath)
             if parser is None:
-                logger.error(f"Could not detect log format for {filepath}")
-                raise ValueError(f"Could not detect log format for: {filepath}")
+                if use_fallback:
+                    logger.info(f"No specific format detected for {filepath}, using universal fallback parser")
+                    parser = UniversalFallbackParser()
+                else:
+                    logger.error(f"Could not detect log format for {filepath}")
+                    raise ValueError(f"Could not detect log format for: {filepath}")
 
         logger.debug(f"Using parser: {parser.name}")
         reader = LogReader(filepath)
