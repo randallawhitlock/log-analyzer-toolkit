@@ -214,8 +214,22 @@ async def test_run_triage_on_analysis(test_db, sample_log_content):
         os.remove(analysis.file_path)
 
 
-def test_triage_service_analysis_not_found(test_db):
+def test_triage_service_analysis_not_found(test_db, monkeypatch):
     """Test triage fails when analysis doesn't exist."""
+    from unittest.mock import Mock
+
+    # Mock the engine initialization to avoid AI provider requirement
+    mock_engine = Mock()
+    mock_provider = Mock()
+    mock_provider.name = "mock_provider"
+    mock_engine._get_provider.return_value = mock_provider
+
+    def mock_init(self, provider_name=None):
+        self.engine = mock_engine
+        self._provider_name = provider_name
+
+    monkeypatch.setattr(TriageService, "__init__", mock_init)
+
     service = TriageService()
 
     with pytest.raises(ValueError, match="Analysis .* not found"):

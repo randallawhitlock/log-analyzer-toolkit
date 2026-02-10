@@ -260,8 +260,21 @@ def test_run_triage(client, sample_log_file):
     client.delete(f"/api/v1/analysis/{analysis_id}")
 
 
-def test_run_triage_analysis_not_found(client):
+def test_run_triage_analysis_not_found(client, monkeypatch):
     """Test triage with non-existent analysis."""
+    from unittest.mock import Mock
+    from backend.services.triage_service import TriageService
+
+    # Mock the TriageService to avoid AI provider requirement
+    mock_service = Mock()
+    mock_service.run_triage_on_analysis.side_effect = ValueError("Analysis non-existent-id not found")
+
+    def mock_init(self, provider_name=None):
+        return None
+
+    monkeypatch.setattr(TriageService, "__init__", mock_init)
+    monkeypatch.setattr(TriageService, "run_triage_on_analysis", lambda self, *args, **kwargs: mock_service.run_triage_on_analysis(*args, **kwargs))
+
     response = client.post(
         "/api/v1/triage",
         json={"analysis_id": "non-existent-id"}

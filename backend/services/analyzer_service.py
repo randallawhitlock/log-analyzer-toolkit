@@ -4,6 +4,7 @@ Service layer for log analysis.
 Wraps the existing LogAnalyzer from CLI tool and adapts it for API use.
 """
 
+import logging
 import os
 import uuid
 import aiofiles
@@ -14,11 +15,14 @@ from sqlalchemy.orm import Session
 from log_analyzer.analyzer import LogAnalyzer, AnalysisResult
 from backend.db import crud, models
 from backend.api import schemas
+from backend.constants import DEFAULT_MAX_ERRORS, UPLOAD_DIRECTORY
+
+
+logger = logging.getLogger(__name__)
 
 
 # Directory for uploaded files
-UPLOAD_DIR = "./uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
 
 
 class AnalyzerService:
@@ -42,22 +46,26 @@ class AnalyzerService:
         Returns:
             str: Path to saved file
         """
+        logger.debug(f"Saving uploaded file: {file.filename}")
+
         # Generate unique filename
         file_id = str(uuid.uuid4())
         file_extension = os.path.splitext(file.filename)[1] or ".log"
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_extension}")
+        file_path = os.path.join(UPLOAD_DIRECTORY, f"{file_id}{file_extension}")
 
         # Save file asynchronously
         async with aiofiles.open(file_path, 'wb') as out_file:
             content = await file.read()
+            file_size = len(content)
             await out_file.write(content)
 
+        logger.info(f"Saved file {file.filename} ({file_size:,} bytes) to {file_path}")
         return file_path
 
     def analyze_file(
         self,
         file_path: str,
-        max_errors: int = 100
+        max_errors: int = DEFAULT_MAX_ERRORS
     ) -> AnalysisResult:
         """
         Analyze a log file using LogAnalyzer.
@@ -72,11 +80,18 @@ class AnalyzerService:
         Raises:
             ValueError: If log format cannot be detected
         """
-        return self.analyzer.analyze(
+        logger.info(f"Starting analysis of {file_path} (max_errors={max_errors})")
+
+        result = self.analyzer.analyze(
             file_path,
             max_errors=max_errors,
             use_fallback=True
         )
+
+        logger.info(f"Analysis complete: {result.parsed_lines:,} lines parsed, "
+                   f"format={result.detected_format}, error_rate={result.error_rate:.1f}%")
+
+        return result
 
     def analysis_result_to_dict(
         self,
@@ -117,7 +132,7 @@ class AnalyzerService:
         self,
         file: UploadFile,
         db: Session,
-        max_errors: int = 100,
+        max_errors: int = DEFAULT_MAX_ERRORS,
         log_format: str = "auto"
     ) -> models.Analysis:
         """
@@ -135,6 +150,8 @@ class AnalyzerService:
         Raises:
             ValueError: If log format cannot be detected or file is invalid
         """
+        logger.info(f"Processing uploaded file: {file.filename} (format={log_format})")
+
         # Save uploaded file
         file_path = await self.save_uploaded_file(file)
 
@@ -151,14 +168,24 @@ class AnalyzerService:
 
             # Store in database
             analysis = crud.create_analysis(db, analysis_data)
+            logger.info(f"Created analysis record: {analysis.id} for {file.filename}")
 
             return analysis
 
-        except Exception as e:
+        except ValueError as e:
+            logger.error(f"Analysis failed for {file.filename}: {e}")
             # Clean up file if analysis fails
             if os.path.exists(file_path):
                 os.remove(file_path)
-            raise e
+                logger.debug(f"Cleaned up file: {file_path}")
+            raise
+        except Exception as e:
+            logger.error(f"Unexpected error analyzing {file.filename}: {e}", exc_info=True)
+            # Clean up file if analysis fails
+            if os.path.exists(file_path):
+                os.remove(file_path)
+                logger.debug(f"Cleaned up file: {file_path}")
+            raise
 
     def delete_file(self, file_path: str) -> bool:
         """
@@ -171,6 +198,13 @@ class AnalyzerService:
             bool: True if deleted, False if file doesn't exist
         """
         if os.path.exists(file_path):
-            os.remove(file_path)
-            return True
-        return False
+            try:
+                os.remove(file_path)
+                logger.info(f"Deleted file: {file_path}")
+                return True
+            except OSError as e:
+                logger.error(f"Failed to delete file {file_path}: {e}")
+                raise
+        else:
+            logger.warning(f"File not found for deletion: {file_path}")
+            return False

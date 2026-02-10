@@ -4,6 +4,7 @@ FastAPI application for Log Analyzer Toolkit.
 Main entry point for the REST API backend.
 """
 
+import logging
 from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -15,6 +16,10 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from backend.db.database import init_db
 from backend.api.schemas import HealthResponse
 from backend.logging_middleware import StructuredLoggingMiddleware
+from backend.constants import MAX_UPLOAD_SIZE_BYTES, MAX_UPLOAD_SIZE_MB
+
+
+logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -51,12 +56,12 @@ class LimitUploadSize(BaseHTTPMiddleware):
                 if content_length > self.max_upload_size:
                     return JSONResponse(
                         status_code=413,
-                        content={"detail": "File too large. Maximum size is 100MB"}
+                        content={"detail": f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB"}
                     )
         return await call_next(request)
 
-# Enforce 100MB limit
-app.add_middleware(LimitUploadSize, max_upload_size=100 * 1024 * 1024)
+# Enforce upload size limit
+app.add_middleware(LimitUploadSize, max_upload_size=MAX_UPLOAD_SIZE_BYTES)
 
 # Add structured logging
 app.add_middleware(StructuredLoggingMiddleware)
@@ -66,8 +71,9 @@ app.add_middleware(StructuredLoggingMiddleware)
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on application startup."""
+    logger.info("Initializing database...")
     init_db()
-    print("✓ Database initialized")
+    logger.info("Database initialized successfully")
 
 
 # Health check endpoint

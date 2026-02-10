@@ -4,6 +4,7 @@ API routes for log analyzer endpoints.
 Provides REST API endpoints for log analysis and triage.
 """
 
+import logging
 from typing import Optional
 from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
 from sqlalchemy.orm import Session
@@ -15,6 +16,17 @@ from backend.db import crud
 from backend.api import schemas
 from backend.services.analyzer_service import AnalyzerService
 from backend.services.triage_service import TriageService
+from backend.constants import (
+    DEFAULT_MAX_ERRORS,
+    MAX_ERRORS_LIMIT,
+    MIN_ERRORS_LIMIT,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    MIN_PAGE_SIZE,
+)
+
+
+logger = logging.getLogger(__name__)
 
 
 router = APIRouter(prefix="/api/v1", tags=["Log Analysis"])
@@ -26,7 +38,7 @@ router = APIRouter(prefix="/api/v1", tags=["Log Analysis"])
 async def analyze_log_file(
     file: UploadFile = File(..., description="Log file to analyze"),
     format: str = Query("auto", description="Log format (currently only 'auto' supported)"),
-    max_errors: int = Query(100, ge=1, le=1000, description="Maximum errors to collect"),
+    max_errors: int = Query(DEFAULT_MAX_ERRORS, ge=MIN_ERRORS_LIMIT, le=MAX_ERRORS_LIMIT, description=f"Maximum errors to collect ({MIN_ERRORS_LIMIT}-{MAX_ERRORS_LIMIT})"),
     db: Session = Depends(get_db)
 ):
     """
@@ -40,6 +52,8 @@ async def analyze_log_file(
     **Returns:**
     - Analysis results with statistics, errors, and metadata
     """
+    logger.info(f"POST /api/v1/analyze - file={file.filename}, format={format}, max_errors={max_errors}")
+
     try:
         service = AnalyzerService()
         analysis = await service.analyze_uploaded_file(
@@ -48,18 +62,24 @@ async def analyze_log_file(
             max_errors=max_errors,
             log_format=format
         )
+        logger.info(f"Analysis created successfully: {analysis.id}")
         return analysis
 
     except ValueError as e:
+        logger.warning(f"Invalid request for {file.filename}: {e}")
         raise HTTPException(status_code=400, detail=str(e))
+    except FileNotFoundError as e:
+        logger.error(f"File not found during analysis of {file.filename}: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
     except Exception as e:
+        logger.error(f"Analysis failed for {file.filename}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
 
 
 @router.get("/analyses", response_model=schemas.AnalysisListResponse)
 def list_analyses(
     skip: int = Query(0, ge=0, description="Number of records to skip (offset)"),
-    limit: int = Query(20, ge=1, le=100, description="Maximum records to return (1-100)"),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=MIN_PAGE_SIZE, le=MAX_PAGE_SIZE, description=f"Maximum records to return ({MIN_PAGE_SIZE}-{MAX_PAGE_SIZE})"),
     format: Optional[str] = Query(None, description="Filter by log format"),
     db: Session = Depends(get_db)
 ):
@@ -156,6 +176,8 @@ def run_triage(
 
     **Note:** Requires AI provider API keys to be configured
     """
+    logger.info(f"POST /api/v1/triage - analysis_id={request.analysis_id}, provider={request.provider or 'auto'}")
+
     try:
         service = TriageService(provider_name=request.provider)
         triage = service.run_triage_on_analysis(
@@ -163,16 +185,20 @@ def run_triage(
             request.analysis_id,
             provider_name=request.provider
         )
+        logger.info(f"Triage created successfully: {triage.id}")
         return triage
 
     except ValueError as e:
+        logger.warning(f"Invalid triage request: {e}")
         raise HTTPException(status_code=404, detail=str(e))
     except ProviderNotAvailableError as e:
+        logger.error(f"AI provider not available: {e}")
         raise HTTPException(
-            status_code=503, 
+            status_code=503,
             detail=f"AI Service Unavailable: {str(e)}. Please configure API keys or start Ollama."
         )
     except Exception as e:
+        logger.error(f"Triage failed for analysis {request.analysis_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Triage failed: {str(e)}")
 
 
