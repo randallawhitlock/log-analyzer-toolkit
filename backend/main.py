@@ -4,6 +4,7 @@ FastAPI application for Log Analyzer Toolkit.
 Main entry point for the REST API backend.
 """
 
+import logging
 from datetime import datetime
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
@@ -15,6 +16,9 @@ from starlette.types import ASGIApp, Receive, Scope, Send
 from backend.db.database import init_db
 from backend.api.schemas import HealthResponse
 from backend.logging_middleware import StructuredLoggingMiddleware
+
+
+logger = logging.getLogger(__name__)
 
 # Create FastAPI app
 app = FastAPI(
@@ -66,8 +70,9 @@ app.add_middleware(StructuredLoggingMiddleware)
 @app.on_event("startup")
 async def startup_event():
     """Initialize database on application startup."""
+    logger.info("Initializing database...")
     init_db()
-    print("✓ Database initialized")
+    logger.info("Database initialized successfully")
 
 
 # Health check endpoint

@@ -4,12 +4,16 @@ Service layer for AI-powered log triage.
 Wraps the existing TriageEngine from CLI tool and adapts it for API use.
 """
 
+import logging
 from typing import Optional
 from sqlalchemy.orm import Session
 
 from log_analyzer.triage import TriageEngine, TriageResult
 from log_analyzer.ai_providers.base import Severity
 from backend.db import crud, models
+
+
+logger = logging.getLogger(__name__)
 
 
 class TriageService:
@@ -27,7 +31,9 @@ class TriageService:
             provider_name: AI provider to use (anthropic, gemini, ollama)
                           Auto-selects if not provided
         """
+        logger.debug(f"Initializing TriageService with provider: {provider_name or 'auto'}")
         self.engine = TriageEngine(provider_name=provider_name)
+        logger.info(f"TriageService initialized with provider: {self.engine._get_provider().name}")
 
     def triage_file(self, file_path: str, max_errors: int = 50) -> TriageResult:
         """
@@ -108,13 +114,19 @@ class TriageService:
             ValueError: If analysis not found
             AIError: If AI analysis fails
         """
+        logger.info(f"Running triage on analysis: {analysis_id} (provider={provider_name or 'default'})")
+
         # Get the analysis
         analysis = crud.get_analysis(db, analysis_id)
         if not analysis:
+            logger.error(f"Analysis not found: {analysis_id}")
             raise ValueError(f"Analysis {analysis_id} not found")
+
+        logger.debug(f"Found analysis: {analysis.filename} ({analysis.detected_format})")
 
         # Create triage engine with specified provider
         if provider_name:
+            logger.debug(f"Creating new engine with provider: {provider_name}")
             engine = TriageEngine(provider_name=provider_name)
         else:
             engine = self.engine
@@ -125,10 +137,16 @@ class TriageService:
             max_errors=50
         )
 
+        logger.info(f"Triage completed: {len(result.issues)} issues found, "
+                   f"severity={result.overall_severity.value}, "
+                   f"confidence={result.confidence:.2f}, "
+                   f"time={result.analysis_time_ms}ms")
+
         # Convert to dict
         triage_data = self.triage_result_to_dict(result, analysis_id)
 
         # Store in database
         triage = crud.create_triage(db, triage_data)
+        logger.info(f"Created triage record: {triage.id} for analysis {analysis_id}")
 
         return triage
