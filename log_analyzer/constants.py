@@ -15,6 +15,10 @@ DEFAULT_MAX_LINES = 200_000  # Maximum lines to read with read_all() to prevent 
 DEFAULT_SAMPLE_SIZE = 100  # Number of lines to sample for format detection
 DEFAULT_MAX_ERRORS = 50  # Default maximum errors/warnings to collect during analysis
 
+# Memory optimization limits
+MAX_COUNTER_SIZE = 10_000  # Maximum unique items in Counter before pruning (prevents unbounded memory growth)
+COUNTER_PRUNE_TO = 5_000  # When pruning Counter, keep only this many most common items
+
 # HTTP status code severity mappings
 HTTP_STATUS_ERROR_THRESHOLD = 500  # Status codes >= 500 are considered errors
 HTTP_STATUS_WARNING_THRESHOLD = 400  # Status codes >= 400 are considered warnings

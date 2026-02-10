@@ -16,6 +16,8 @@ A powerful command-line tool for parsing, analyzing, and troubleshooting log fil
 - 🎨 **Beautiful CLI** - Color-coded terminal output with Rich
 - 🧠 **AI-Powered Triage** - Intelligent analysis with Claude, Gemini, or Ollama
 - 🔒 **Privacy Options** - Local LLM support via Ollama for sensitive logs
+- ⚡ **High Performance** - Multithreaded parsing for fast analysis of large files
+- 💾 **Memory Optimized** - Automatic counter pruning prevents memory exhaustion
 
 ## 📚 Comprehensive Implementation Guide
 
@@ -84,6 +86,31 @@ ollama pull qwen2.5-coder:14b
 python -m log_analyzer configure --show
 ```
 
+### Step 2.5: Performance Configuration (Optional)
+
+The analyzer uses multithreading by default for optimal performance. You can customize the behavior:
+
+**Environment Variable:**
+```bash
+# Set maximum worker threads (default: CPU count)
+export LOG_ANALYZER_MAX_WORKERS=8
+```
+
+**Configuration File (~/.log-analyzer/config.yaml):**
+```yaml
+# Maximum worker threads for parallel processing
+max_workers: 8
+
+# Other settings...
+default_provider: anthropic
+```
+
+**Performance Tips:**
+- Default multithreading works well for files >10k lines
+- For very large files (>1M lines), increase max_workers up to 2x CPU count
+- For small files (<1k lines), single-threaded may be faster
+- Memory is automatically managed via counter pruning for large datasets
+
 ### Step 3: Running Analysis (CLI)
 
 The Command Line Interface (CLI) is the primary way to interact with the toolkit.
@@ -119,11 +146,29 @@ Integrate the analyzer directly into your monitoring scripts or dashboards.
 ```python
 from log_analyzer.analyzer import LogAnalyzer
 
+# Basic usage (multithreading enabled by default)
 analyzer = LogAnalyzer()
 result = analyzer.analyze("/var/log/app.log")
 
 print(f"Error Rate: {result.error_rate}%")
 print(f"Total Lines: {result.total_lines}")
+
+# Advanced: Control threading and performance
+analyzer = LogAnalyzer(max_workers=4)  # Explicit worker count
+
+# Analyze with custom settings
+result = analyzer.analyze(
+    "/var/log/large-file.log",
+    use_threading=True,      # Enable multithreading (default)
+    chunk_size=10000,         # Lines per chunk (default: 10000)
+    max_errors=100,           # Max errors to collect
+)
+
+# Disable threading for small files
+result = analyzer.analyze(
+    "/var/log/small.log",
+    use_threading=False,      # Single-threaded mode
+)
 ```
 
 **AI Triage API:**

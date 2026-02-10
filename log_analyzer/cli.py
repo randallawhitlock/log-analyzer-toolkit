@@ -105,18 +105,23 @@ def cli(ctx, verbose: bool, log_file: str):
               default='auto', help='Log format (default: auto-detect)')
 @click.option('--max-errors', '-e', default=DEFAULT_MAX_ERRORS,
               help='Maximum errors to display')
-def analyze(filepath: str, log_format: str, max_errors: int):
+@click.option('--workers', '-w', 'max_workers', type=int,
+              help='Number of worker threads (default: CPU count)')
+@click.option('--no-threading', is_flag=True,
+              help='Disable multithreaded processing')
+def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, no_threading: bool):
     """
     Analyze a log file and display summary statistics.
 
     FILEPATH is the path to the log file to analyze.
     """
     logger.info(f"Starting analysis of {filepath}")
-    logger.debug(f"Parameters: log_format={log_format}, max_errors={max_errors}")
+    logger.debug(f"Parameters: log_format={log_format}, max_errors={max_errors}, "
+                f"max_workers={max_workers}, no_threading={no_threading}")
 
     console.print()
 
-    analyzer = LogAnalyzer()
+    analyzer = LogAnalyzer(max_workers=max_workers)
 
     # Get parser
     parser = None
@@ -164,7 +169,8 @@ def analyze(filepath: str, log_format: str, max_errors: int):
                 filepath,
                 parser=parser,
                 max_errors=max_errors,
-                progress_callback=ProgressUpdater(progress, task)
+                progress_callback=ProgressUpdater(progress, task),
+                use_threading=not no_threading
             )
 
         logger.info(f"Analysis completed: {result.parsed_lines} lines parsed, "

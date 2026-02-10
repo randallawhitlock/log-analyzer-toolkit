@@ -46,6 +46,7 @@ ENV_VARS = {
     "gemini": "GOOGLE_API_KEY",
     "ollama_host": "OLLAMA_HOST",
     "default_provider": "LOG_ANALYZER_PROVIDER",
+    "max_workers": "LOG_ANALYZER_MAX_WORKERS",
 }
 
 
@@ -92,16 +93,18 @@ class ProviderConfig:
 class Config:
     """
     Main configuration class for Log Analyzer Toolkit.
-    
+
     Attributes:
         default_provider: Preferred AI provider (anthropic, gemini, ollama)
         providers: Provider-specific configurations
         config_file: Path to the configuration file (if loaded)
+        max_workers: Maximum number of worker threads for parallel processing
     """
-    
+
     default_provider: Optional[str] = None
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
     config_file: Optional[Path] = None
+    max_workers: Optional[int] = None  # None means use CPU count
     
     def __post_init__(self):
         """Initialize default provider configs if not provided."""
@@ -169,10 +172,10 @@ class Config:
     def to_dict(self) -> dict:
         """
         Convert config to dictionary for YAML serialization.
-        
+
         Note: API keys are NOT included in the output.
         """
-        return {
+        result = {
             "default_provider": self.default_provider,
             "providers": {
                 name: {
@@ -183,6 +186,9 @@ class Config:
                 for name, cfg in self.providers.items()
             },
         }
+        if self.max_workers is not None:
+            result["max_workers"] = self.max_workers
+        return result
 
 
 def mask_api_key(key: Optional[str]) -> str:
@@ -259,6 +265,7 @@ def load_config(path: Optional[Path] = None) -> Config:
 
             config.config_file = config_path
             config.default_provider = data.get("default_provider")
+            config.max_workers = data.get("max_workers")
 
             # Load provider configs
             providers_data = data.get("providers", {})
@@ -295,6 +302,15 @@ def load_config(path: Optional[Path] = None) -> Config:
     if env_provider:
         logger.debug(f"Overriding default_provider from environment: {env_provider}")
         config.default_provider = env_provider
+
+    # Override max_workers from environment if set
+    env_max_workers = os.environ.get(ENV_VARS["max_workers"])
+    if env_max_workers:
+        try:
+            config.max_workers = int(env_max_workers)
+            logger.debug(f"Overriding max_workers from environment: {config.max_workers}")
+        except ValueError:
+            logger.warning(f"Invalid max_workers value in environment: {env_max_workers}")
 
     return config
 

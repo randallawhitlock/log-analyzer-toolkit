@@ -40,16 +40,16 @@ __all__ = [
 class LogEntry:
     """
     Represents a single parsed log entry.
-    
+
     Attributes:
-        raw: The original raw log line
+        raw: The original raw log line (optional, defaults to empty for memory efficiency)
         timestamp: Parsed timestamp (if available)
         level: Log level/severity (if available)
         message: The main message content
         source: Source of the log (IP, hostname, etc.)
         metadata: Additional parsed fields
     """
-    raw: str
+    raw: str = ""
     timestamp: Optional[datetime] = None
     level: Optional[str] = None
     message: str = ""
@@ -148,7 +148,6 @@ class ApacheAccessParser(BaseParser):
             level = 'INFO'
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level=level,
             message=data.get('request', ''),
@@ -213,8 +212,7 @@ class ApacheErrorParser(BaseParser):
             level = self.LEVEL_MAP.get(data.get('level', '').lower(), 'INFO')
             
             return LogEntry(
-                raw=line,
-                timestamp=None,
+                    timestamp=None,
                 level=level,
                 message=data.get('message', ''),
                 source=data.get('client'),
@@ -231,8 +229,7 @@ class ApacheErrorParser(BaseParser):
             level = self.LEVEL_MAP.get(data.get('level', '').lower(), 'INFO')
             
             return LogEntry(
-                raw=line,
-                timestamp=None,
+                    timestamp=None,
                 level=level,
                 message=data.get('message', ''),
                 source=None,
@@ -300,7 +297,6 @@ class NginxAccessParser(BaseParser):
             level = 'DEBUG'
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level=level,
             message=data.get('request', ''),
@@ -391,7 +387,6 @@ class JSONLogParser(BaseParser):
                 break
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level=level,
             message=message,
@@ -539,7 +534,6 @@ class SyslogParser(BaseParser):
             level = 'DEBUG'
         
         return LogEntry(
-            raw=line,
             timestamp=None,  # BSD timestamps need current year
             level=level,
             message=message,
@@ -559,7 +553,6 @@ class SyslogParser(BaseParser):
         facility = priority // 8
         
         return LogEntry(
-            raw=line,
             timestamp=None,  # 3164 timestamps need current year
             level=self.SEVERITY_MAP.get(severity, 'INFO'),
             message=data.get('message', ''),
@@ -590,7 +583,6 @@ class SyslogParser(BaseParser):
                 pass
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level=self.SEVERITY_MAP.get(severity, 'INFO'),
             message=data.get('message', ''),
@@ -647,7 +639,6 @@ class AndroidParser(BaseParser):
         level = self.LEVEL_MAP.get(data.get('level', 'I'), 'INFO')
         
         return LogEntry(
-            raw=line,
             timestamp=None,  # Would need year for full timestamp
             level=level,
             message=data.get('message', ''),
@@ -724,7 +715,6 @@ class JavaLogParser(BaseParser):
             level = 'CRITICAL'
         
         return LogEntry(
-            raw=line,
             timestamp=None,
             level=level,
             message=data.get('message', ''),
@@ -770,7 +760,6 @@ class HDFSParser(BaseParser):
             level = 'WARNING'
         
         return LogEntry(
-            raw=line,
             timestamp=None,
             level=level,
             message=data.get('message', ''),
@@ -829,8 +818,7 @@ class SupercomputerParser(BaseParser):
                 level = 'INFO'
             
             return LogEntry(
-                raw=line,
-                timestamp=None,
+                    timestamp=None,
                 level=level,
                 message=data.get('message', ''),
                 source=data.get('node'),
@@ -854,8 +842,7 @@ class SupercomputerParser(BaseParser):
                 level = 'WARNING'
             
             return LogEntry(
-                raw=line,
-                timestamp=None,
+                    timestamp=None,
                 level=level,
                 message=syslog_data,
                 source=data.get('node'),
@@ -903,7 +890,6 @@ class WindowsEventParser(BaseParser):
             level = 'INFO'
         
         return LogEntry(
-            raw=line,
             timestamp=None,
             level=level,
             message=data.get('message', ''),
@@ -950,7 +936,6 @@ class ProxifierParser(BaseParser):
             level = 'DEBUG'
         
         return LogEntry(
-            raw=line,
             timestamp=None,
             level=level,
             message=message,
@@ -1002,7 +987,6 @@ class HPCParser(BaseParser):
             level = 'WARNING'
         
         return LogEntry(
-            raw=line,
             timestamp=None,
             level=level,
             message=data.get('message', ''),
@@ -1053,7 +1037,6 @@ class HealthAppParser(BaseParser):
             pass
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level='INFO',
             message=data.get('message', ''),
@@ -1109,7 +1092,6 @@ class OpenStackParser(BaseParser):
         level = data.get('level', 'INFO').upper()
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level=level,
             message=data.get('message', ''),
@@ -1175,7 +1157,6 @@ class SquidParser(BaseParser):
             level = 'WARNING'
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level=level,
             message=f"{data.get('method', '')} {data.get('url', '')}",
@@ -1247,7 +1228,6 @@ class NginxParser(BaseParser):
             level = 'INFO'
         
         return LogEntry(
-            raw=line,
             timestamp=timestamp,
             level=level,
             message=data.get('request', ''),
@@ -1368,7 +1348,6 @@ class UniversalFallbackParser(BaseParser):
                 level = 'DEBUG'
         
         return LogEntry(
-            raw=line,
             timestamp=None,  # Would need parsing logic for each format
             level=level,
             message=message if message else line,
