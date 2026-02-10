@@ -42,3 +42,10 @@ DEFAULT_OLLAMA_TIMEOUT = 300.0  # Ollama may need longer for local inference
 
 # Token estimation (rough approximation)
 CHARS_PER_TOKEN = 4  # Approximate characters per token for prompt size estimation
+
+# Analytics configuration
+DEFAULT_TIME_BUCKET_SIZE = '1h'  # Default time bucket size: '5min', '15min', '1h', '1day'
+DEFAULT_ANOMALY_THRESHOLD = 3.0  # Z-score threshold for anomaly detection
+DEFAULT_BURST_THRESHOLD = 2.0  # Standard deviations above mean for burst detection
+DEFAULT_SIMILARITY_THRESHOLD = 0.8  # Similarity threshold for message clustering
+MAX_ANALYTICS_ENTRIES = 100_000  # Maximum log entries to process for analytics (memory limit)

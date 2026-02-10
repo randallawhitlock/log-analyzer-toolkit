@@ -40,6 +40,15 @@ from .parsers import (
 from .reader import LogReader
 from .constants import DEFAULT_SAMPLE_SIZE, DEFAULT_MAX_ERRORS, MAX_COUNTER_SIZE, COUNTER_PRUNE_TO
 
+# Analytics imports (optional, loaded on demand)
+try:
+    from .stats_models import AnalyticsData
+    from .analytics import compute_analytics
+    ANALYTICS_AVAILABLE = True
+except ImportError:
+    ANALYTICS_AVAILABLE = False
+    AnalyticsData = None
+
 
 logger = logging.getLogger(__name__)
 
@@ -104,7 +113,10 @@ class AnalysisResult:
     
     # HTTP specific (for access logs)
     status_codes: dict = field(default_factory=dict)
-    
+
+    # Advanced analytics (optional, Phase 3B)
+    analytics: Optional[Any] = None  # AnalyticsData when computed
+
     @property
     def error_rate(self) -> float:
         """Calculate error rate as percentage."""
@@ -178,7 +190,9 @@ class LogAnalyzer:
 
     def _analyze_multithreaded(self, filepath: str, parser: BaseParser,
                                 max_errors: int, progress_callback: Optional[Any],
-                                chunk_size: int, start_time: float) -> AnalysisResult:
+                                chunk_size: int, start_time: float,
+                                enable_analytics: bool = False,
+                                analytics_config: Optional[dict] = None) -> AnalysisResult:
         """
         Analyze log file using multithreaded processing.
 
@@ -189,6 +203,8 @@ class LogAnalyzer:
             progress_callback: Optional progress callback
             chunk_size: Number of lines per chunk
             start_time: Analysis start time
+            enable_analytics: Whether to compute analytics
+            analytics_config: Optional analytics configuration
 
         Returns:
             AnalysisResult with all analysis data
@@ -257,12 +273,16 @@ class LogAnalyzer:
             total_lines=total_lines,
             chunk_results=chunk_results,
             max_errors=max_errors,
-            start_time=start_time
+            start_time=start_time,
+            enable_analytics=enable_analytics,
+            analytics_config=analytics_config
         )
 
     def _merge_chunk_results(self, filepath: str, parser: BaseParser,
                              total_lines: int, chunk_results: list[dict],
-                             max_errors: int, start_time: float) -> AnalysisResult:
+                             max_errors: int, start_time: float,
+                             enable_analytics: bool = False,
+                             analytics_config: Optional[dict] = None) -> AnalysisResult:
         """
         Merge results from multiple chunk processing tasks.
 
@@ -273,6 +293,8 @@ class LogAnalyzer:
             chunk_results: List of results from each chunk
             max_errors: Maximum errors/warnings to keep
             start_time: Analysis start time
+            enable_analytics: Whether to compute analytics
+            analytics_config: Optional analytics configuration
 
         Returns:
             Merged AnalysisResult
@@ -336,6 +358,17 @@ class LogAnalyzer:
             top_errors=error_messages.most_common(10),
             status_codes=dict(status_codes),
         )
+
+        # Compute advanced analytics if enabled
+        if enable_analytics and ANALYTICS_AVAILABLE:
+            logger.debug("Computing advanced analytics (multithreaded)")
+            result.analytics = compute_analytics(
+                errors=errors,
+                warnings=warnings,
+                level_counts=dict(level_counts),
+                source_counts=dict(source_counts),
+                config=analytics_config or {}
+            )
 
         logger.info(f"Multithreaded analysis completed in {elapsed:.2f}s: "
                    f"{parsed_lines:,} lines parsed ({result.parse_success_rate:.1f}% success), "
@@ -479,7 +512,9 @@ class LogAnalyzer:
                 use_fallback: bool = True,
                 detect_inline: bool = True,
                 use_threading: bool = True,
-                chunk_size: int = 10000) -> AnalysisResult:
+                chunk_size: int = 10000,
+                enable_analytics: bool = False,
+                analytics_config: Optional[dict] = None) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
 
@@ -494,6 +529,11 @@ class LogAnalyzer:
                           If False, use separate detection pass.
             use_threading: If True, use multithreading for parallel parsing (default: True).
             chunk_size: Number of lines per chunk when using threading (default: 10000).
+            enable_analytics: If True, compute advanced analytics (time-series, etc.).
+            analytics_config: Optional analytics configuration dict with keys:
+                - time_bucket_size: '5min', '15min', '1h', '1day' (default: '1h')
+                - enable_time_series: bool (default: True)
+                - enable_statistics: bool (default: False)
 
         Returns:
             AnalysisResult with all analysis data
@@ -542,7 +582,9 @@ class LogAnalyzer:
                 max_errors=max_errors,
                 progress_callback=progress_callback,
                 chunk_size=chunk_size,
-                start_time=start_time
+                start_time=start_time,
+                enable_analytics=enable_analytics,
+                analytics_config=analytics_config
             )
 
         # Fall back to single-threaded implementation
@@ -717,6 +759,19 @@ class LogAnalyzer:
             top_errors=error_messages.most_common(10),
             status_codes=dict(status_codes),
         )
+
+        # Compute advanced analytics if enabled
+        if enable_analytics and ANALYTICS_AVAILABLE:
+            logger.debug("Computing advanced analytics")
+            result.analytics = compute_analytics(
+                errors=errors,
+                warnings=warnings,
+                level_counts=dict(level_counts),
+                source_counts=dict(source_counts),
+                config=analytics_config or {}
+            )
+        elif enable_analytics and not ANALYTICS_AVAILABLE:
+            logger.warning("Analytics requested but analytics module not available")
 
         elapsed = time.time() - start_time
         logger.info(f"Analysis completed in {elapsed:.2f}s: "

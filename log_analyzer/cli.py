@@ -109,7 +109,17 @@ def cli(ctx, verbose: bool, log_file: str):
               help='Number of worker threads (default: CPU count)')
 @click.option('--no-threading', is_flag=True,
               help='Disable multithreaded processing')
-def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, no_threading: bool):
+@click.option('--enable-analytics', is_flag=True,
+              help='Enable advanced analytics (time-series, pattern analysis)')
+@click.option('--time-bucket', default='1h',
+              type=click.Choice(['5min', '15min', '1h', '1day']),
+              help='Time bucket size for temporal analysis (default: 1h)')
+@click.option('--report', type=click.Choice(['markdown', 'html', 'csv', 'json']),
+              help='Generate report in specified format')
+@click.option('--output', '-o', type=click.Path(),
+              help='Output file path for report')
+def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, no_threading: bool,
+            enable_analytics: bool, time_bucket: str, report: str, output: str):
     """
     Analyze a log file and display summary statistics.
 
@@ -165,12 +175,20 @@ def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, n
                 def update(self, advance=1):
                     self.progress.update(self.task_id, advance=advance)
 
+            # Build analytics config
+            analytics_config = {
+                'time_bucket_size': time_bucket,
+                'enable_time_series': True,
+            }
+
             result = analyzer.analyze(
                 filepath,
                 parser=parser,
                 max_errors=max_errors,
                 progress_callback=ProgressUpdater(progress, task),
-                use_threading=not no_threading
+                use_threading=not no_threading,
+                enable_analytics=enable_analytics,
+                analytics_config=analytics_config if enable_analytics else None
             )
 
         logger.info(f"Analysis completed: {result.parsed_lines} lines parsed, "
@@ -193,7 +211,37 @@ def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, n
         console.print(f"[red]Unexpected error:[/red] {e}")
         sys.exit(1)
 
-    _display_analysis(result)
+    # Display results in terminal (unless only generating a report)
+    if not report or not output:
+        _display_analysis(result)
+
+    # Generate report if requested
+    if report:
+        from .report import ReportGenerator
+
+        console.print()
+        with console.status(f"[bold blue]Generating {report.upper()} report..."):
+            generator = ReportGenerator(result)
+
+            if report == 'markdown':
+                content = generator.to_markdown()
+            elif report == 'html':
+                content = generator.to_html()
+            elif report == 'csv':
+                content = generator.to_csv()
+            elif report == 'json':
+                content = generator.to_json()
+            else:
+                content = generator.to_markdown()
+
+        if output:
+            with open(output, 'w', encoding='utf-8') as f:
+                f.write(content)
+            console.print(f"[green]✓ Report saved to {output}[/green]")
+        else:
+            # Output to console if no output file specified
+            console.print()
+            console.print(content)
 
 
 def _display_analysis(result: AnalysisResult):
@@ -297,8 +345,96 @@ def _display_analysis(result: AnalysisResult):
 
         for source, count in result.top_sources[:MAX_DISPLAY_ENTRIES]:
             sources.add_row(source, f"{count:,}")
-        
+
         console.print(sources)
+
+    # Analytics (if enabled)
+    if result.analytics:
+        console.print()
+        _display_analytics(result.analytics, console)
+
+
+def _display_analytics(analytics, console: Console):
+    """Display analytics data in terminal."""
+    # Import here to avoid circular dependency
+    from .stats_models import AnalyticsData
+
+    # Time-Series Summary Panel
+    console.print(Panel(
+        f"Trend: [cyan]{analytics.trend_direction}[/cyan]\n"
+        f"Peak Period: [yellow]{analytics.peak_period or 'N/A'}[/yellow]\n"
+        f"Active Hours: [green]{len(analytics.hourly_distribution)}[/green]",
+        title="📈 Time-Series Analytics",
+        border_style="cyan"
+    ))
+    console.print()
+
+    # Hourly Distribution Bar Chart (ASCII)
+    if analytics.hourly_distribution:
+        _display_hourly_chart(analytics.hourly_distribution, console)
+        console.print()
+
+    # Temporal Distribution (recent buckets)
+    if analytics.temporal_distribution:
+        _display_temporal_table(analytics.temporal_distribution, console)
+
+
+def _display_hourly_chart(hourly_dist: dict, console: Console):
+    """Display hourly distribution as ASCII bar chart."""
+    if not hourly_dist:
+        return
+
+    max_count = max(hourly_dist.values())
+
+    table = Table(title="Hourly Distribution (24-hour)", box=box.ROUNDED)
+    table.add_column("Hour", justify="right", style="cyan")
+    table.add_column("Count", justify="right")
+    table.add_column("Activity", width=40)
+
+    for hour in range(24):
+        count = hourly_dist.get(hour, 0)
+        if count > 0:
+            bar_width = int((count / max_count) * 40) if max_count > 0 else 0
+            bar = "█" * bar_width
+            table.add_row(f"{hour:02d}:00", f"{count:,}", bar)
+
+    console.print(table)
+
+
+def _display_temporal_table(temporal_dist: dict, console: Console):
+    """Display temporal distribution table (showing recent buckets)."""
+    if not temporal_dist:
+        return
+
+    # Sort by timestamp and show last 10 buckets
+    sorted_buckets = sorted(temporal_dist.items())[-10:]
+
+    table = Table(title="Recent Activity (Time Buckets)", box=box.ROUNDED)
+    table.add_column("Time Period", style="cyan")
+    table.add_column("Count", justify="right")
+    table.add_column("Activity", width=30)
+
+    max_count = max(count for _, count in sorted_buckets) if sorted_buckets else 1
+
+    for timestamp_str, count in sorted_buckets:
+        # Format timestamp for display (show just the time portion)
+        try:
+            # Extract time portion from ISO format
+            if 'T' in timestamp_str:
+                time_part = timestamp_str.split('T')[1][:5]  # HH:MM
+                date_part = timestamp_str.split('T')[0][5:]  # MM-DD
+                display_time = f"{date_part} {time_part}"
+            else:
+                display_time = timestamp_str[:16]
+        except (IndexError, ValueError):
+            display_time = timestamp_str
+
+        bar_width = int((count / max_count) * 30) if max_count > 0 else 0
+        bar = "█" * bar_width
+
+        table.add_row(display_time, f"{count:,}", bar)
+
+    console.print(table)
 
 
 @cli.command()
