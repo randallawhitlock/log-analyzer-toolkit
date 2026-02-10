@@ -11,6 +11,7 @@ from sqlalchemy.orm import Session
 from log_analyzer.triage import TriageEngine, TriageResult
 from log_analyzer.ai_providers.base import Severity
 from backend.db import crud, models
+from backend.constants import DEFAULT_TRIAGE_MAX_ERRORS
 
 
 logger = logging.getLogger(__name__)
@@ -35,7 +36,7 @@ class TriageService:
         self.engine = TriageEngine(provider_name=provider_name)
         logger.info(f"TriageService initialized with provider: {self.engine._get_provider().name}")
 
-    def triage_file(self, file_path: str, max_errors: int = 50) -> TriageResult:
+    def triage_file(self, file_path: str, max_errors: int = DEFAULT_TRIAGE_MAX_ERRORS) -> TriageResult:
         """
         Run AI triage on a log file.
 
@@ -134,7 +135,7 @@ class TriageService:
         # Run triage
         result = engine.triage(
             analysis.file_path,
-            max_errors=50
+            max_errors=DEFAULT_TRIAGE_MAX_ERRORS
         )
 
         logger.info(f"Triage completed: {len(result.issues)} issues found, "

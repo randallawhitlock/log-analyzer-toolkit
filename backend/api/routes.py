@@ -16,6 +16,14 @@ from backend.db import crud
 from backend.api import schemas
 from backend.services.analyzer_service import AnalyzerService
 from backend.services.triage_service import TriageService
+from backend.constants import (
+    DEFAULT_MAX_ERRORS,
+    MAX_ERRORS_LIMIT,
+    MIN_ERRORS_LIMIT,
+    DEFAULT_PAGE_SIZE,
+    MAX_PAGE_SIZE,
+    MIN_PAGE_SIZE,
+)
 
 
 logger = logging.getLogger(__name__)
@@ -30,7 +38,7 @@ router = APIRouter(prefix="/api/v1", tags=["Log Analysis"])
 async def analyze_log_file(
     file: UploadFile = File(..., description="Log file to analyze"),
     format: str = Query("auto", description="Log format (currently only 'auto' supported)"),
-    max_errors: int = Query(100, ge=1, le=1000, description="Maximum errors to collect"),
+    max_errors: int = Query(DEFAULT_MAX_ERRORS, ge=MIN_ERRORS_LIMIT, le=MAX_ERRORS_LIMIT, description=f"Maximum errors to collect ({MIN_ERRORS_LIMIT}-{MAX_ERRORS_LIMIT})"),
     db: Session = Depends(get_db)
 ):
     """
@@ -71,7 +79,7 @@ async def analyze_log_file(
 @router.get("/analyses", response_model=schemas.AnalysisListResponse)
 def list_analyses(
     skip: int = Query(0, ge=0, description="Number of records to skip (offset)"),
-    limit: int = Query(20, ge=1, le=100, description="Maximum records to return (1-100)"),
+    limit: int = Query(DEFAULT_PAGE_SIZE, ge=MIN_PAGE_SIZE, le=MAX_PAGE_SIZE, description=f"Maximum records to return ({MIN_PAGE_SIZE}-{MAX_PAGE_SIZE})"),
     format: Optional[str] = Query(None, description="Filter by log format"),
     db: Session = Depends(get_db)
 ):

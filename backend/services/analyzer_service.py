@@ -15,14 +15,14 @@ from sqlalchemy.orm import Session
 from log_analyzer.analyzer import LogAnalyzer, AnalysisResult
 from backend.db import crud, models
 from backend.api import schemas
+from backend.constants import DEFAULT_MAX_ERRORS, UPLOAD_DIRECTORY
 
 
 logger = logging.getLogger(__name__)
 
 
 # Directory for uploaded files
-UPLOAD_DIR = "./uploads"
-os.makedirs(UPLOAD_DIR, exist_ok=True)
+os.makedirs(UPLOAD_DIRECTORY, exist_ok=True)
 
 
 class AnalyzerService:
@@ -51,7 +51,7 @@ class AnalyzerService:
         # Generate unique filename
         file_id = str(uuid.uuid4())
         file_extension = os.path.splitext(file.filename)[1] or ".log"
-        file_path = os.path.join(UPLOAD_DIR, f"{file_id}{file_extension}")
+        file_path = os.path.join(UPLOAD_DIRECTORY, f"{file_id}{file_extension}")
 
         # Save file asynchronously
         async with aiofiles.open(file_path, 'wb') as out_file:
@@ -65,7 +65,7 @@ class AnalyzerService:
     def analyze_file(
         self,
         file_path: str,
-        max_errors: int = 100
+        max_errors: int = DEFAULT_MAX_ERRORS
     ) -> AnalysisResult:
         """
         Analyze a log file using LogAnalyzer.
@@ -132,7 +132,7 @@ class AnalyzerService:
         self,
         file: UploadFile,
         db: Session,
-        max_errors: int = 100,
+        max_errors: int = DEFAULT_MAX_ERRORS,
         log_format: str = "auto"
     ) -> models.Analysis:
         """
