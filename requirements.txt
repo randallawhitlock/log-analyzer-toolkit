@@ -2,6 +2,7 @@
 rich>=13.0.0
 click>=8.0.0
 pyyaml>=6.0.0
+python-dotenv>=1.0.0
 
 # AI Providers (install those you need)
 anthropic>=0.40.0

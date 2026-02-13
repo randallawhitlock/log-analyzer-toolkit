@@ -4,8 +4,15 @@ FastAPI application for Log Analyzer Toolkit.
 Main entry point for the REST API backend.
 """
 
+# Load .env BEFORE any other imports to ensure env vars are available
+from pathlib import Path
+from dotenv import load_dotenv
+_env_path = Path(__file__).resolve().parent.parent / ".env"
+load_dotenv(_env_path, override=True)
+
 import logging
 from datetime import datetime
+
 from fastapi import FastAPI, Request
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
