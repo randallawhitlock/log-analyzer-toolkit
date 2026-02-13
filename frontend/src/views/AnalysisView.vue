@@ -143,9 +143,7 @@
           </div>
         </div>
 
-        <div class="triage-summary">
-          {{ triage.summary }}
-        </div>
+        <div class="triage-summary markdown-content" v-html="renderMarkdown(triage.summary)"></div>
 
         <div v-if="triage.issues && triage.issues.length > 0" class="issues-list">
           <h3>Identified Issues</h3>
@@ -156,10 +154,29 @@
               </span>
               <span class="issue-title">{{ issue.title }}</span>
             </div>
-            <p class="issue-description">{{ issue.description }}</p>
+            <div class="issue-description markdown-content" v-html="renderMarkdown(issue.description)"></div>
             <div v-if="issue.recommendation" class="issue-recommendation">
               <strong>💡 Recommendation:</strong>
-              {{ issue.recommendation }}
+              <div class="markdown-content" v-html="renderMarkdown(issue.recommendation)"></div>
+            </div>
+            <div class="issue-actions">
+              <button
+                @click="runDeepDive(idx, issue)"
+                :disabled="deepDiveLoading[idx]"
+                class="deep-dive-btn"
+              >
+                <span v-if="deepDiveLoading[idx]" class="btn-spinner"></span>
+                {{ deepDiveLoading[idx] ? 'Analyzing...' : '🔬 Deep Dive' }}
+              </button>
+            </div>
+            <div v-if="deepDiveResults[idx]" class="deep-dive-panel">
+              <div class="deep-dive-header">
+                <h4>🔬 Deep Dive Analysis</h4>
+                <span class="deep-dive-meta">
+                  {{ deepDiveResults[idx].provider_used }} · {{ deepDiveResults[idx].model_used }} · {{ (deepDiveResults[idx].analysis_time_ms / 1000).toFixed(1) }}s
+                </span>
+              </div>
+              <div class="deep-dive-content markdown-content" v-html="renderMarkdown(deepDiveResults[idx].detailed_analysis)"></div>
             </div>
           </div>
         </div>
@@ -171,9 +188,21 @@
 <script setup>
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
+import { marked } from 'marked'
 import StatCard from '../components/StatCard.vue'
 import LevelChart from '../components/LevelChart.vue'
 import { useApi } from '../composables/useApi'
+
+// Configure marked for safe rendering
+marked.setOptions({
+  breaks: true,
+  gfm: true,
+})
+
+const renderMarkdown = (text) => {
+  if (!text) return ''
+  return marked.parse(text)
+}
 
 const route = useRoute()
 const router = useRouter()
@@ -182,6 +211,7 @@ const {
   deleteAnalysis, 
   runTriage, 
   getTriagesForAnalysis,
+  deepDiveIssue,
   loading, 
   error 
 } = useApi()
@@ -192,6 +222,8 @@ const triageLoading = ref(false)
 const showSample = ref(false)
 const loadingSamples = ref(false)
 const logSamples = ref([])
+const deepDiveLoading = ref({})
+const deepDiveResults = ref({})
 
 const topErrors = computed(() => {
   return analysis.value?.top_errors?.slice(0, 10) || []
@@ -240,11 +272,34 @@ const runTriageAnalysis = async () => {
     triageLoading.value = true
     const result = await runTriage(route.params.id)
     triage.value = result
+    // Reset deep dive results when re-running triage
+    deepDiveLoading.value = {}
+    deepDiveResults.value = {}
   } catch (err) {
     console.error('Triage failed:', err)
     alert('Failed to run triage: ' + (err.message || 'Unknown error'))
   } finally {
     triageLoading.value = false
+  }
+}
+
+const runDeepDive = async (idx, issue) => {
+  try {
+    deepDiveLoading.value = { ...deepDiveLoading.value, [idx]: true }
+    const result = await deepDiveIssue({
+      analysis_id: route.params.id,
+      issue_title: issue.title,
+      issue_description: issue.description || '',
+      issue_severity: issue.severity || 'MEDIUM',
+      issue_recommendation: issue.recommendation || '',
+      affected_components: issue.affected_components || [],
+    })
+    deepDiveResults.value = { ...deepDiveResults.value, [idx]: result }
+  } catch (err) {
+    console.error('Deep dive failed:', err)
+    alert('Deep dive failed: ' + (err.response?.data?.detail || err.message || 'Unknown error'))
+  } finally {
+    deepDiveLoading.value = { ...deepDiveLoading.value, [idx]: false }
   }
 }
 
@@ -666,6 +721,146 @@ onMounted(async () => {
   border-radius: 8px;
   border-left: 3px solid var(--color-primary, #646cff);
   font-size: 13px;
+}
+
+/* Markdown Content Styles */
+.markdown-content :deep(p) {
+  margin: 0 0 8px 0;
+  line-height: 1.6;
+}
+
+.markdown-content :deep(p:last-child) {
+  margin-bottom: 0;
+}
+
+.markdown-content :deep(ul),
+.markdown-content :deep(ol) {
+  margin: 8px 0;
+  padding-left: 24px;
+}
+
+.markdown-content :deep(li) {
+  margin-bottom: 4px;
+  line-height: 1.5;
+}
+
+.markdown-content :deep(code) {
+  background: rgba(100, 108, 255, 0.15);
+  padding: 2px 6px;
+  border-radius: 4px;
+  font-family: var(--font-mono, monospace);
+  font-size: 0.9em;
+}
+
+.markdown-content :deep(pre) {
+  background: var(--color-bg-tertiary, #2a2a4e);
+  padding: 12px;
+  border-radius: 8px;
+  overflow-x: auto;
+  margin: 8px 0;
+}
+
+.markdown-content :deep(pre code) {
+  background: none;
+  padding: 0;
+}
+
+.markdown-content :deep(strong) {
+  color: var(--color-text, #fff);
+}
+
+.markdown-content :deep(a) {
+  color: var(--color-primary, #646cff);
+  text-decoration: none;
+}
+
+.markdown-content :deep(a:hover) {
+  text-decoration: underline;
+}
+
+.markdown-content :deep(blockquote) {
+  border-left: 3px solid var(--color-border, #3a3a55);
+  margin: 8px 0;
+  padding: 4px 12px;
+  color: var(--color-text-muted, #aaa);
+}
+
+.markdown-content :deep(h1),
+.markdown-content :deep(h2),
+.markdown-content :deep(h3),
+.markdown-content :deep(h4) {
+  margin: 12px 0 8px 0;
+  font-size: 1em;
+  font-weight: 600;
+}
+
+/* Deep Dive */
+.issue-actions {
+  margin-top: 12px;
+  display: flex;
+  justify-content: flex-end;
+}
+
+.deep-dive-btn {
+  padding: 8px 16px;
+  border: 1px solid var(--color-border, #3a3a55);
+  border-radius: 8px;
+  background: transparent;
+  color: var(--color-text-muted, #aaa);
+  font-size: 13px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: all 0.2s ease;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+}
+
+.deep-dive-btn:hover:not(:disabled) {
+  background: linear-gradient(135deg, rgba(100, 108, 255, 0.15), rgba(156, 39, 176, 0.15));
+  border-color: var(--color-primary, #646cff);
+  color: var(--color-text, #fff);
+}
+
+.deep-dive-btn:disabled {
+  opacity: 0.7;
+  cursor: not-allowed;
+}
+
+.deep-dive-panel {
+  margin-top: 16px;
+  padding: 20px;
+  background: linear-gradient(135deg, rgba(100, 108, 255, 0.05), rgba(156, 39, 176, 0.05));
+  border: 1px solid rgba(100, 108, 255, 0.2);
+  border-radius: 12px;
+}
+
+.deep-dive-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  margin-bottom: 16px;
+  padding-bottom: 12px;
+  border-bottom: 1px solid var(--color-border, #3a3a55);
+}
+
+.deep-dive-header h4 {
+  margin: 0;
+  font-size: 15px;
+  background: linear-gradient(135deg, var(--color-primary, #646cff), var(--color-secondary, #9c27b0));
+  -webkit-background-clip: text;
+  -webkit-text-fill-color: transparent;
+  background-clip: text;
+}
+
+.deep-dive-meta {
+  font-size: 11px;
+  color: var(--color-text-dim, #666);
+}
+
+.deep-dive-content {
+  font-size: 14px;
+  line-height: 1.7;
 }
 
 /* Export Button */
