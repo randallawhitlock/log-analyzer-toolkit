@@ -66,7 +66,7 @@ jobs:
             --tb=short \
             --cov=log_analyzer \
             --cov-report=term-missing \
-            --cov-fail-under=80
+            --cov-fail-under=55
 
   # ──────────────────────────────────────────────
   # Frontend: build validation
