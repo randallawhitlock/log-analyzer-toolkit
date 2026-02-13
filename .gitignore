@@ -31,3 +31,4 @@ Thumbs.db
 # Application Data
 log_analyzer.db
 uploads/
+.env
