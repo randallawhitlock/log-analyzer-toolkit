@@ -111,3 +111,33 @@ module = [
     "httpx.*",
 ]
 ignore_missing_imports = true
+
+[tool.ruff]
+target-version = "py310"
+line-length = 120
+exclude = [
+    "venv",
+    ".venv",
+    "__pycache__",
+    "migrations",
+    "*.egg-info",
+]
+
+[tool.ruff.lint]
+select = [
+    "E",   # pycodestyle errors
+    "F",   # pyflakes
+    "W",   # pycodestyle warnings
+    "I",   # isort
+    "UP",  # pyupgrade
+    "B",   # flake8-bugbear
+    "SIM", # flake8-simplify
+]
+ignore = [
+    "E501",   # line too long (handled by formatter)
+    "B008",   # do not perform function calls in argument defaults (FastAPI Depends)
+    "SIM108", # use ternary operator (sometimes less readable)
+]
+
+[tool.ruff.lint.isort]
+known-first-party = ["log_analyzer", "backend"]
