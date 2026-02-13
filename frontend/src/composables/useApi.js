@@ -204,6 +204,21 @@ export function useApi() {
         }
     }
 
+    /**
+     * Run a deep dive analysis on a specific triage issue.
+     * @param {Object} issueData - Issue context for deep dive
+     * @returns {Promise<Object>} Detailed analysis result
+     */
+    const deepDiveIssue = async (issueData) => {
+        try {
+            const response = await axios.post(`${API_BASE}/api/v1/triage/deep-dive`, issueData)
+            return response.data
+        } catch (err) {
+            error.value = err.response?.data?.detail || err.message
+            throw err
+        }
+    }
+
     return {
         loading,
         error,
@@ -215,6 +230,7 @@ export function useApi() {
         getTriage,
         getTriagesForAnalysis,
         getFormats,
-        checkHealth
+        checkHealth,
+        deepDiveIssue
     }
 }

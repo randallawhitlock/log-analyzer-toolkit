@@ -151,3 +151,98 @@ class TriageService:
         logger.info(f"Created triage record: {triage.id} for analysis {analysis_id}")
 
         return triage
+
+    def deep_dive_issue(
+        self,
+        db: Session,
+        analysis_id: str,
+        issue_title: str,
+        issue_description: str,
+        issue_severity: str,
+        issue_recommendation: str,
+        affected_components: list[str],
+        provider_name: Optional[str] = None,
+    ) -> dict:
+        """
+        Perform a deep dive analysis on a specific triage issue.
+
+        Sends the issue context back to the LLM for detailed
+        resolution steps and root cause analysis.
+
+        Args:
+            db: Database session
+            analysis_id: Analysis ID for context
+            issue_title: Title of the issue to deep dive
+            issue_description: Original issue description
+            issue_severity: Issue severity level
+            issue_recommendation: Original recommendation
+            affected_components: List of affected components
+            provider_name: Optional AI provider override
+
+        Returns:
+            dict with detailed_analysis, provider_used, model_used, analysis_time_ms
+        """
+        import time
+
+        logger.info(f"Deep dive requested for issue: {issue_title}")
+
+        # Get analysis context
+        analysis = crud.get_analysis(db, analysis_id)
+        if not analysis:
+            raise ValueError(f"Analysis {analysis_id} not found")
+
+        # Build deep dive prompt
+        components_str = ", ".join(affected_components) if affected_components else "Unknown"
+        prompt = f"""You are an expert systems engineer performing a deep-dive analysis on a specific issue found during log analysis.
+
+## Original Issue Context
+- **Issue Title**: {issue_title}
+- **Severity**: {issue_severity}
+- **Affected Components**: {components_str}
+- **Description**: {issue_description}
+- **Initial Recommendation**: {issue_recommendation}
+
+## Log File Context
+- **File**: {analysis.filename}
+- **Format**: {analysis.detected_format}
+- **Total Lines**: {analysis.total_lines:,}
+
+---
+
+Please provide a comprehensive deep-dive analysis with the following sections:
+
+### Root Cause Analysis
+Explain the most likely root cause(s) of this issue in detail.
+
+### Step-by-Step Resolution
+Provide exact, actionable steps to fix this issue. Include specific commands, configuration changes, or code fixes where applicable. Use code blocks for any commands or configurations.
+
+### Verification Steps
+How to verify the fix worked. Include commands to run, logs to check, or metrics to monitor.
+
+### Prevention Strategies
+How to prevent this issue from recurring. Include monitoring recommendations, alerting thresholds, or architectural improvements.
+
+### Related Issues
+Note any other issues that might be caused by or related to this problem.
+
+Format your response in clean markdown with headers, bullet points, and code blocks where appropriate."""
+
+        # Get AI provider
+        from log_analyzer.ai_providers import get_provider
+        engine_provider = get_provider(provider_name)
+
+        start_time = time.time()
+        response = engine_provider.analyze(prompt)
+        elapsed_ms = (time.time() - start_time) * 1000
+
+        logger.info(f"Deep dive completed in {elapsed_ms:.0f}ms for: {issue_title}")
+
+        return {
+            "issue_title": issue_title,
+            "detailed_analysis": response.content,
+            "provider_used": response.provider,
+            "model_used": response.model,
+            "analysis_time_ms": elapsed_ms,
+        }
+
