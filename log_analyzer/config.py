@@ -53,7 +53,7 @@ ENV_VARS = {
 # Default model configurations (latest as of Feb 2026)
 DEFAULT_MODELS = {
     "anthropic": "claude-sonnet-4-5-20250929",
-    "gemini": "gemini-3-pro-preview",
+    "gemini": "gemini-2.5-flash",
     "ollama": "llama3",
 }
 

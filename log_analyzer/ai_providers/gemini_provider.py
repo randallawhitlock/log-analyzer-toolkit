@@ -26,14 +26,18 @@ from .base import (
 
 # Latest Gemini models as of February 2026
 GEMINI_MODELS = {
-    "gemini-3-pro-preview": "gemini-3-pro-preview", # Preview model
-    "gemini-1.5-pro": "gemini-1.5-pro",           # Stable
-    "gemini-1.5-flash": "gemini-1.5-flash",       # Fast and efficient
+    "gemini-2.5-flash": "gemini-2.5-flash",           # Fast, efficient, free-tier friendly
+    "gemini-2.5-pro": "gemini-2.5-pro",               # Best reasoning & coding
+    "gemini-3-flash-preview": "gemini-3-flash-preview", # Cutting-edge fast preview
+    "gemini-3-pro-preview": "gemini-3-pro-preview",   # Cutting-edge pro (may require billing)
+    "gemini-2.0-flash": "gemini-2.0-flash",           # Stable previous-gen
 }
 
-# Default model - Gemini 3 Pro for best log analysis quality
-# Default model
-DEFAULT_MODEL = GEMINI_MODELS["gemini-3-pro-preview"]
+# Default model - gemini-2.5-flash is reliable on free tier
+DEFAULT_MODEL = GEMINI_MODELS["gemini-2.5-flash"]
+
+# Fallback order when rate limited on the primary model
+FALLBACK_MODELS = ["gemini-2.5-flash", "gemini-3-flash-preview", "gemini-2.0-flash"]
 
 
 class GeminiProvider(AIProvider):
@@ -241,8 +245,46 @@ class GeminiProvider(AIProvider):
             raise AIError(f"Invalid request to Gemini API: {e}") from e
             
         except google_exceptions.ResourceExhausted as e:
+            # Try fallback models before giving up
+            logger.warning(f"Rate limited on model {self._model}, trying fallbacks...")
+            for fallback in FALLBACK_MODELS:
+                if fallback == self._model:
+                    continue  # Skip the model that just failed
+                try:
+                    logger.info(f"Trying fallback model: {fallback}")
+                    self._client = None  # Clear cached model
+                    old_model = self._model
+                    self._model = fallback
+                    fallback_model = self._get_model(system_instruction=system_prompt)
+                    response = fallback_model.generate_content(prompt)
+                    latency_ms = (time.perf_counter() - start_time) * 1000
+                    content = response.text if response.text else ""
+                    usage = {}
+                    if hasattr(response, 'usage_metadata') and response.usage_metadata:
+                        usage = {
+                            "prompt_tokens": getattr(response.usage_metadata, 'prompt_token_count', 0),
+                            "candidates_tokens": getattr(response.usage_metadata, 'candidates_token_count', 0),
+                            "total_tokens": getattr(response.usage_metadata, 'total_token_count', 0),
+                        }
+                    logger.info(f"Fallback model {fallback} succeeded")
+                    return AIResponse(
+                        content=content,
+                        model=self._model,
+                        provider=self.name,
+                        usage=usage,
+                        latency_ms=latency_ms,
+                        raw_response=response,
+                    )
+                except google_exceptions.ResourceExhausted:
+                    logger.warning(f"Fallback model {fallback} also rate limited")
+                    self._model = old_model
+                    continue
+                except Exception as fallback_err:
+                    logger.warning(f"Fallback model {fallback} failed: {fallback_err}")
+                    self._model = old_model
+                    continue
             raise RateLimitError(
-                "Gemini rate limit exceeded. Please try again later."
+                "Gemini rate limit exceeded on all models. Please try again later."
             ) from e
             
         except google_exceptions.PermissionDenied as e:
