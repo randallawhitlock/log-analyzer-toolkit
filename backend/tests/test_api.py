@@ -2,20 +2,20 @@
 Tests for API endpoints.
 """
 
-import pytest
-import tempfile
 import atexit
+import tempfile
 from io import BytesIO
+
+import pytest
 from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.main import app
 from backend.db.database import Base, get_db
-
+from backend.main import app
 
 # Create test database (file-based for thread safety with FastAPI)
-TEST_DB_FILE = tempfile.NamedTemporaryFile(delete=False, suffix=".db")
+TEST_DB_FILE = tempfile.NamedTemporaryFile(delete=False, suffix=".db")  # noqa: SIM115
 TEST_DATABASE_URL = f"sqlite:///{TEST_DB_FILE.name}"
 
 # Clean up test database on exit
@@ -263,6 +263,7 @@ def test_run_triage(client, sample_log_file):
 def test_run_triage_analysis_not_found(client, monkeypatch):
     """Test triage with non-existent analysis."""
     from unittest.mock import Mock
+
     from backend.services.triage_service import TriageService
 
     # Mock the TriageService to avoid AI provider requirement

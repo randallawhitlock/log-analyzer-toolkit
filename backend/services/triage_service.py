@@ -5,14 +5,13 @@ Wraps the existing TriageEngine from CLI tool and adapts it for API use.
 """
 
 import logging
-from typing import Optional
+
 from sqlalchemy.orm import Session
 
-from log_analyzer.triage import TriageEngine, TriageResult
-from log_analyzer.ai_providers.base import Severity
-from backend.db import crud, models
 from backend.constants import DEFAULT_TRIAGE_MAX_ERRORS
-
+from backend.db import crud, models
+from log_analyzer.ai_providers.base import Severity
+from log_analyzer.triage import TriageEngine, TriageResult
 
 logger = logging.getLogger(__name__)
 
@@ -24,7 +23,7 @@ class TriageService:
     Wraps TriageEngine and provides database persistence.
     """
 
-    def __init__(self, provider_name: Optional[str] = None):
+    def __init__(self, provider_name: str | None = None):
         """
         Initialize triage service.
 
@@ -98,7 +97,7 @@ class TriageService:
         self,
         db: Session,
         analysis_id: str,
-        provider_name: Optional[str] = None
+        provider_name: str | None = None
     ) -> models.Triage:
         """
         Run AI triage on an existing analysis.
@@ -161,7 +160,7 @@ class TriageService:
         issue_severity: str,
         issue_recommendation: str,
         affected_components: list[str],
-        provider_name: Optional[str] = None,
+        provider_name: str | None = None,
     ) -> dict:
         """
         Perform a deep dive analysis on a specific triage issue.

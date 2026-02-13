@@ -10,7 +10,7 @@ Supported providers:
 - Ollama (local)
 """
 
-from .base import AIProvider, AIResponse, AIError, ProviderNotAvailableError
+from .base import AIError, AIProvider, AIResponse, ProviderNotAvailableError
 from .factory import get_provider, list_available_providers
 
 __all__ = [

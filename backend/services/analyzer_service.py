@@ -7,16 +7,14 @@ Wraps the existing LogAnalyzer from CLI tool and adapts it for API use.
 import logging
 import os
 import uuid
+
 import aiofiles
-from typing import Optional
 from fastapi import UploadFile
 from sqlalchemy.orm import Session
 
-from log_analyzer.analyzer import LogAnalyzer, AnalysisResult
-from backend.db import crud, models
-from backend.api import schemas
 from backend.constants import DEFAULT_MAX_ERRORS, UPLOAD_DIRECTORY
-
+from backend.db import crud, models
+from log_analyzer.analyzer import AnalysisResult, LogAnalyzer
 
 logger = logging.getLogger(__name__)
 

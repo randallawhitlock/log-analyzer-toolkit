@@ -6,8 +6,6 @@ time-series analysis, anomaly detection, and pattern mining.
 """
 
 from dataclasses import dataclass, field
-from typing import Optional
-
 
 __all__ = ["AnalyticsData"]
 
@@ -29,10 +27,10 @@ class AnalyticsData:
     hourly_distribution: dict[int, int] = field(default_factory=dict)
     """Distribution by hour of day (0-23) -> count"""
 
-    trend_direction: Optional[str] = None
+    trend_direction: str | None = None
     """Overall trend: 'increasing', 'decreasing', or 'stable'"""
 
-    peak_period: Optional[str] = None
+    peak_period: str | None = None
     """Time period with highest activity"""
 
     # Statistical Analysis
@@ -46,7 +44,7 @@ class AnalyticsData:
     anomalies: list = field(default_factory=list)
     """List of detected anomalies with details"""
 
-    baseline_deviation: Optional[float] = None
+    baseline_deviation: float | None = None
     """Percentage deviation from baseline error rate"""
 
     # Pattern Analysis

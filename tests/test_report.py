@@ -4,13 +4,12 @@ Unit tests for report generation module.
 
 import json
 import tempfile
-from datetime import datetime
 from pathlib import Path
 
 from log_analyzer.analyzer import AnalysisResult
+from log_analyzer.charts import generate_ascii_bar_chart, generate_chartjs_config
 from log_analyzer.report import ReportGenerator
 from log_analyzer.stats_models import AnalyticsData
-from log_analyzer.charts import generate_chartjs_config, generate_ascii_bar_chart
 
 
 class TestReportGeneration:
@@ -253,7 +252,7 @@ class TestReportGeneration:
 
             assert Path(output_path).exists()
 
-            with open(output_path, 'r', encoding='utf-8') as f:
+            with open(output_path, encoding='utf-8') as f:
                 content = f.read()
                 assert "# Log Analysis Report" in content
         finally:
@@ -280,7 +279,7 @@ class TestReportGeneration:
 
             assert Path(output_path).exists()
 
-            with open(output_path, 'r', encoding='utf-8') as f:
+            with open(output_path, encoding='utf-8') as f:
                 content = f.read()
                 assert "<!DOCTYPE html>" in content
         finally:

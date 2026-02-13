@@ -6,11 +6,9 @@ configuration and auto-detect available providers.
 """
 
 import logging
-from typing import Optional
 
-from .base import AIProvider, ProviderNotAvailableError
 from ..config import get_config
-
+from .base import AIProvider, ProviderNotAvailableError
 
 logger = logging.getLogger(__name__)
 
@@ -67,7 +65,7 @@ def _register_providers():
 def list_available_providers() -> list[str]:
     """
     List all providers that have their dependencies installed.
-    
+
     Returns:
         List of provider names that can be instantiated
     """
@@ -106,28 +104,28 @@ def list_configured_providers() -> list[str]:
 
 
 def get_provider(
-    name: Optional[str] = None,
-    model: Optional[str] = None,
+    name: str | None = None,
+    model: str | None = None,
     **kwargs
 ) -> AIProvider:
     """
     Get an AI provider instance.
-    
+
     If no name is specified, attempts to auto-detect the best
     available provider in order of preference:
     1. Anthropic (if ANTHROPIC_API_KEY is set)
     2. Gemini (if GOOGLE_API_KEY is set)
     3. Ollama (if server is running locally)
-    
+
     Args:
         name: Provider name ('anthropic', 'gemini', 'ollama')
               If None, auto-detects best available.
         model: Optional model override
         **kwargs: Additional provider-specific arguments
-        
+
     Returns:
         Configured AIProvider instance
-        
+
     Raises:
         ProviderNotAvailableError: If no provider is available
         ValueError: If specified provider is unknown
@@ -158,7 +156,7 @@ def get_provider(
 
         logger.info(f"Using provider: {name} (model={provider.get_model()})")
         return provider
-    
+
     # Auto-detect best available provider
     # Priority: Configured default > Anthropic > Gemini > Ollama
     logger.debug("Auto-detecting best available provider...")
@@ -190,7 +188,7 @@ def get_provider(
             logger.debug(f"Provider {provider_name} failed to initialize: {e}")
         except Exception as e:
             logger.error(f"Unexpected error initializing {provider_name}: {e}", exc_info=True)
-    
+
     # No provider available
     installed = list_available_providers()
     if not installed:
@@ -200,7 +198,7 @@ def get_provider(
             "  pip install google-generativeai  # For Gemini\n"
             "  pip install httpx            # For Ollama"
         )
-    
+
     raise ProviderNotAvailableError(
         f"No AI providers configured. Installed: {installed}\n"
         "Configure one of:\n"

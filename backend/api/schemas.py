@@ -4,10 +4,10 @@ Pydantic schemas for API request/response validation.
 These schemas define the structure of data sent to and returned from API endpoints.
 """
 
-from typing import List, Optional, Dict, Any
 from datetime import datetime
-from pydantic import BaseModel, Field, ConfigDict
+from typing import Any
 
+from pydantic import BaseModel, ConfigDict, Field
 
 # ==================== Analysis Schemas ====================
 
@@ -31,13 +31,13 @@ class AnalysisCreate(BaseModel):
     failed_lines: int
     parse_success_rate: float
     error_rate: float
-    level_counts: Dict[str, int]
-    top_errors: List[List[Any]]
-    top_sources: List[List[Any]]
-    status_codes: Dict[int, int]
-    earliest_timestamp: Optional[datetime] = None
-    latest_timestamp: Optional[datetime] = None
-    time_span: Optional[str] = None
+    level_counts: dict[str, int]
+    top_errors: list[list[Any]]
+    top_sources: list[list[Any]]
+    status_codes: dict[int, int]
+    earliest_timestamp: datetime | None = None
+    latest_timestamp: datetime | None = None
+    time_span: str | None = None
     file_path: str
 
 
@@ -53,19 +53,19 @@ class AnalysisResponse(BaseModel):
     failed_lines: int
     parse_success_rate: float
     error_rate: float
-    level_counts: Dict[str, int]
-    top_errors: List[List[Any]]
-    top_sources: List[List[Any]]
-    status_codes: Dict[int, int]
-    earliest_timestamp: Optional[datetime] = None
-    latest_timestamp: Optional[datetime] = None
-    time_span: Optional[str] = None
+    level_counts: dict[str, int]
+    top_errors: list[list[Any]]
+    top_sources: list[list[Any]]
+    status_codes: dict[int, int]
+    earliest_timestamp: datetime | None = None
+    latest_timestamp: datetime | None = None
+    time_span: str | None = None
     created_at: datetime
 
 
 class AnalysisListResponse(BaseModel):
     """Schema for paginated analysis list response."""
-    analyses: List[AnalysisResponse]
+    analyses: list[AnalysisResponse]
     total: int
     page: int
     per_page: int
@@ -80,7 +80,7 @@ class TriageIssue(BaseModel):
     severity: str
     confidence: float
     description: str
-    affected_components: List[str]
+    affected_components: list[str]
     recommendation: str
 
 
@@ -90,16 +90,16 @@ class TriageCreate(BaseModel):
     summary: str
     overall_severity: str
     confidence: float
-    issues: List[Dict[str, Any]]
+    issues: list[dict[str, Any]]
     provider_used: str
     analysis_time_ms: float
-    raw_analysis: Optional[str] = None
+    raw_analysis: str | None = None
 
 
 class TriageRequest(BaseModel):
     """Schema for triage request."""
     analysis_id: str
-    provider: Optional[str] = Field(
+    provider: str | None = Field(
         None,
         description="AI provider to use (anthropic, gemini, ollama). Auto-selects if not provided."
     )
@@ -112,8 +112,8 @@ class DeepDiveRequest(BaseModel):
     issue_description: str
     issue_severity: str
     issue_recommendation: str
-    affected_components: List[str] = []
-    provider: Optional[str] = Field(
+    affected_components: list[str] = []
+    provider: str | None = Field(
         None,
         description="AI provider to use. Auto-selects if not provided."
     )
@@ -137,7 +137,7 @@ class TriageResponse(BaseModel):
     summary: str
     overall_severity: str
     confidence: float
-    issues: List[Dict[str, Any]]
+    issues: list[dict[str, Any]]
     provider_used: str
     analysis_time_ms: float
     created_at: datetime
@@ -148,7 +148,7 @@ class TriageResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Schema for error responses."""
     detail: str
-    error_type: Optional[str] = None
+    error_type: str | None = None
 
 
 class SuccessResponse(BaseModel):
@@ -165,5 +165,5 @@ class HealthResponse(BaseModel):
 
 class FormatsResponse(BaseModel):
     """Schema for supported formats response."""
-    formats: List[Dict[str, str]]
+    formats: list[dict[str, str]]
     total: int

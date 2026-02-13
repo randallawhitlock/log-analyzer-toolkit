@@ -10,21 +10,20 @@ import sys
 from pathlib import Path
 
 import click
+from rich import box
 from rich.console import Console
 from rich.panel import Panel
+from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn, TextColumn, TimeElapsedColumn
 from rich.table import Table
 from rich.text import Text
-from rich.progress import Progress, SpinnerColumn, BarColumn, TextColumn, TimeElapsedColumn, TaskProgressColumn
-from rich import box
 
-from .analyzer import LogAnalyzer, AnalysisResult, AVAILABLE_PARSERS
+from .analyzer import AVAILABLE_PARSERS, AnalysisResult, LogAnalyzer
 from .constants import (
-    LEVEL_COLORS,
-    MAX_MESSAGE_LENGTH,
-    MAX_DISPLAY_ENTRIES,
     DEFAULT_MAX_ERRORS,
+    LEVEL_COLORS,
+    MAX_DISPLAY_ENTRIES,
+    MAX_MESSAGE_LENGTH,
 )
-
 
 console = Console()
 logger = logging.getLogger(__name__)
@@ -246,7 +245,7 @@ def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, n
 
 def _display_analysis(result: AnalysisResult):
     """Display analysis results in a formatted layout."""
-    
+
     # Header
     console.print(Panel(
         f"[bold]{Path(result.filepath).name}[/bold]\n"
@@ -255,35 +254,35 @@ def _display_analysis(result: AnalysisResult):
         border_style="blue"
     ))
     console.print()
-    
+
     # Overview table
     overview = Table(title="Overview", box=box.ROUNDED, show_header=False)
     overview.add_column("Metric", style="bold")
     overview.add_column("Value", justify="right")
-    
+
     overview.add_row("Total Lines", f"{result.total_lines:,}")
     overview.add_row("Parsed Lines", f"{result.parsed_lines:,}")
     overview.add_row("Failed Lines", f"{result.failed_lines:,}")
     overview.add_row("Parse Success", f"{result.parse_success_rate:.1f}%")
     overview.add_row("Error Rate", f"{result.error_rate:.1f}%")
-    
+
     if result.time_span:
         overview.add_row("Time Span", str(result.time_span))
     if result.earliest_timestamp:
         overview.add_row("First Entry", result.earliest_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
     if result.latest_timestamp:
         overview.add_row("Last Entry", result.latest_timestamp.strftime("%Y-%m-%d %H:%M:%S"))
-    
+
     console.print(overview)
     console.print()
-    
+
     # Severity breakdown
     if result.level_counts:
         severity = Table(title="Severity Breakdown", box=box.ROUNDED)
         severity.add_column("Level", style="bold")
         severity.add_column("Count", justify="right")
         severity.add_column("Percentage", justify="right")
-        
+
         for level in ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']:
             count = result.level_counts.get(level, 0)
             if count > 0:
@@ -293,24 +292,24 @@ def _display_analysis(result: AnalysisResult):
                     f"{count:,}",
                     f"{pct:.1f}%"
                 )
-        
+
         console.print(severity)
         console.print()
-    
+
     # HTTP Status codes (for access logs)
     if result.status_codes:
         status = Table(title="HTTP Status Codes", box=box.ROUNDED)
         status.add_column("Code", style="bold")
         status.add_column("Count", justify="right")
         status.add_column("Category")
-        
+
         categories = {
             2: ("2xx Success", "green"),
             3: ("3xx Redirect", "yellow"),
             4: ("4xx Client Error", "orange1"),
             5: ("5xx Server Error", "red"),
         }
-        
+
         for code in sorted(result.status_codes.keys()):
             count = result.status_codes[code]
             cat_key = code // 100
@@ -320,10 +319,10 @@ def _display_analysis(result: AnalysisResult):
                 f"{count:,}",
                 Text(cat_name, style=cat_style)
             )
-        
+
         console.print(status)
         console.print()
-    
+
     # Top Error Messages
     if result.top_errors:
         errors = Table(title="Top Error Messages", box=box.ROUNDED)
@@ -333,10 +332,10 @@ def _display_analysis(result: AnalysisResult):
         for msg, count in result.top_errors[:MAX_DISPLAY_ENTRIES]:
             truncated = msg[:MAX_MESSAGE_LENGTH] + "..." if len(msg) > MAX_MESSAGE_LENGTH else msg
             errors.add_row(str(count), truncated)
-        
+
         console.print(errors)
         console.print()
-    
+
     # Top Sources
     if result.top_sources:
         sources = Table(title="Top Sources", box=box.ROUNDED)
@@ -357,7 +356,6 @@ def _display_analysis(result: AnalysisResult):
 def _display_analytics(analytics, console: Console):
     """Display analytics data in terminal."""
     # Import here to avoid circular dependency
-    from .stats_models import AnalyticsData
 
     # Time-Series Summary Panel
     console.print(Panel(
@@ -442,12 +440,12 @@ def _display_temporal_table(temporal_dist: dict, console: Console):
 def detect(filepath: str):
     """
     Detect the log format of a file.
-    
+
     FILEPATH is the path to the log file to analyze.
     """
     analyzer = LogAnalyzer()
     parser = analyzer.detect_format(filepath)
-    
+
     if parser:
         console.print(f"[green]Detected format:[/green] [bold]{parser.name}[/bold]")
     else:
@@ -457,37 +455,37 @@ def detect(filepath: str):
 
 @cli.command()
 @click.argument('filepath', type=click.Path(exists=True))
-@click.option('--level', '-l', 
+@click.option('--level', '-l',
               type=click.Choice(['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']),
               default='ERROR', help='Minimum level to show')
 @click.option('--limit', '-n', default=20, help='Maximum entries to show')
 def errors(filepath: str, level: str, limit: int):
     """
     Show errors and warnings from a log file.
-    
+
     FILEPATH is the path to the log file to analyze.
     """
     level_order = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
     min_level_idx = level_order.index(level)
-    
+
     analyzer = LogAnalyzer()
     count = 0
-    
+
     console.print(f"[bold]Errors from {Path(filepath).name}[/bold]")
     console.print()
-    
+
     for entry in analyzer.parse_file(filepath):
         if entry.level and level_order.index(entry.level) >= min_level_idx:
             ts = entry.timestamp.strftime("%H:%M:%S") if entry.timestamp else "---"
             console.print(f"[dim]{ts}[/dim] ", end="")
             console.print(format_level(entry.level), end=" ")
             console.print(entry.message[:MAX_MESSAGE_LENGTH])
-            
+
             count += 1
             if count >= limit:
                 console.print(f"\n[dim]... showing first {limit} matches[/dim]")
                 break
-    
+
     if count == 0:
         console.print(f"[green]No entries at {level} level or above[/green]")
 
@@ -498,7 +496,7 @@ def formats():
     table = Table(title="Supported Log Formats", box=box.ROUNDED)
     table.add_column("Format Name", style="cyan bold")
     table.add_column("Description")
-    
+
     descriptions = {
         'aws_cloudwatch': 'AWS CloudWatch Logs (JSON and plain text)',
         'gcp_logging': 'Google Cloud Logging (Stackdriver format)',
@@ -512,10 +510,10 @@ def formats():
         'json': 'JSON structured logging (various apps)',
         'syslog': 'Syslog format (RFC 3164 & RFC 5424)',
     }
-    
+
     for parser in AVAILABLE_PARSERS:
         table.add_row(parser.name, descriptions.get(parser.name, ""))
-    
+
     console.print(table)
 
 
@@ -533,24 +531,23 @@ def formats():
 def triage(filepath: str, provider: str, log_format: str, output_json: bool):
     """
     AI-powered intelligent log triage.
-    
+
     Analyzes FILEPATH using AI to identify issues, assess severity,
     and provide actionable recommendations.
-    
+
     Examples:
-    
+
         log_analyzer triage /var/log/app.log
-        
+
         log_analyzer triage --provider ollama /var/log/app.log
-        
+
         log_analyzer triage --json /var/log/app.log
     """
     import json as json_module
-    
+
+    from .ai_providers import ProviderNotAvailableError
     from .triage import TriageEngine
-    from .ai_providers import get_provider, ProviderNotAvailableError
-    from .ai_providers.base import Severity
-    
+
     logger.info(f"Starting AI triage of {filepath}")
     logger.debug(f"Parameters: provider={provider}, log_format={log_format}, output_json={output_json}")
 
@@ -605,12 +602,12 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
         logger.error(f"Unexpected error during triage: {e}", exc_info=True)
         console.print(f"[red]Error during analysis:[/red] {e}")
         sys.exit(1)
-    
+
     # Output as JSON if requested
     if output_json:
         console.print(json_module.dumps(result.to_dict(), indent=2))
         return
-    
+
     # Display rich triage results
     _display_triage(result, filepath)
 
@@ -618,7 +615,7 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
 def _display_triage(result, filepath: str):
     """Display triage results in a formatted layout."""
     from .ai_providers.base import Severity
-    
+
     # Severity colors
     severity_colors = {
         Severity.CRITICAL: 'bold red',
@@ -627,50 +624,50 @@ def _display_triage(result, filepath: str):
         Severity.LOW: 'blue',
         Severity.HEALTHY: 'green',
     }
-    
+
     # Header panel
-    severity_text = Text(result.overall_severity.value, 
+    severity_text = Text(result.overall_severity.value,
                         style=severity_colors.get(result.overall_severity, 'white'))
-    
+
     header_content = (
         f"[bold]{Path(filepath).name}[/bold]\n"
         f"Provider: [cyan]{result.provider_used}[/cyan] • "
         f"Confidence: [cyan]{result.confidence:.0%}[/cyan]"
     )
-    
+
     console.print(Panel(
         header_content,
         title=f"🧠 AI Triage Report - {severity_text}",
         border_style=severity_colors.get(result.overall_severity, 'blue')
     ))
     console.print()
-    
+
     # Summary
     console.print(Panel(result.summary, title="📋 Summary", border_style="blue"))
     console.print()
-    
+
     # Statistics
     stats = Table(title="📊 Statistics", box=box.ROUNDED, show_header=False)
     stats.add_column("Metric", style="bold")
     stats.add_column("Value", justify="right")
-    
+
     stats.add_row("Lines Analyzed", f"{result.analyzed_lines:,}")
     stats.add_row("Errors Found", f"{result.error_count:,}")
     stats.add_row("Warnings Found", f"{result.warning_count:,}")
     if result.analysis_time_ms:
         stats.add_row("Analysis Time", f"{result.analysis_time_ms:.0f}ms")
-    
+
     console.print(stats)
     console.print()
-    
+
     # Issues
     if result.issues:
         console.print(f"[bold]🔍 Identified Issues ({len(result.issues)})[/bold]")
         console.print()
-        
+
         for i, issue in enumerate(result.issues, 1):
             issue_color = severity_colors.get(issue.severity, 'white')
-            
+
             # Issue header
             console.print(Panel(
                 f"[bold]{issue.title}[/bold]\n\n"
@@ -695,54 +692,54 @@ def _display_triage(result, filepath: str):
 def configure(provider: str, show: bool):
     """
     Configure AI providers for log triage.
-    
+
     Shows the current configuration status or helps set up providers.
-    
+
     Examples:
-    
+
         log_analyzer configure --show
-        
+
         log_analyzer configure --provider anthropic
     """
-    from .config import get_provider_status, get_config, mask_api_key
-    
+    from .config import get_provider_status
+
     if show or (not provider):
         # Show current configuration
         console.print()
         console.print(Panel("AI Provider Configuration", border_style="blue"))
         console.print()
-        
+
         status = get_provider_status()
-        
+
         table = Table(box=box.ROUNDED)
         table.add_column("Provider", style="cyan bold")
         table.add_column("Status")
         table.add_column("Model")
         table.add_column("API Key")
-        
+
         for name, info in status.items():
             if info["configured"]:
                 status_icon = "[green]✅ Ready[/green]"
             else:
                 status_icon = "[yellow]⚠️ Not configured[/yellow]"
-            
+
             # For Ollama, show server status
             if name == "ollama":
                 if info.get("server_available"):
                     status_icon = "[green]✅ Server running[/green]"
                 else:
                     status_icon = "[yellow]⚠️ Server not running[/yellow]"
-            
+
             table.add_row(
                 name.capitalize(),
                 status_icon,
                 info["model"],
                 info["api_key_display"],
             )
-        
+
         console.print(table)
         console.print()
-        
+
         # Show setup instructions
         console.print("[bold]Setup Instructions:[/bold]")
         console.print()
@@ -756,9 +753,9 @@ def configure(provider: str, show: bool):
         console.print("  ollama serve")
         console.print("  ollama pull llama3.3")
         console.print()
-        
+
         return
-    
+
     # Provider-specific configuration
     if provider == "anthropic":
         _configure_anthropic()
@@ -771,11 +768,11 @@ def configure(provider: str, show: bool):
 def _configure_anthropic():
     """Help configure Anthropic provider."""
     import os
-    
+
     console.print()
     console.print(Panel("Anthropic Claude Configuration", border_style="blue"))
     console.print()
-    
+
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
         from .config import mask_api_key
@@ -787,18 +784,18 @@ def _configure_anthropic():
         console.print("1. Get an API key from https://console.anthropic.com/")
         console.print("2. Set the environment variable:")
         console.print("   [cyan]export ANTHROPIC_API_KEY='your-key'[/cyan]")
-    
+
     console.print()
 
 
 def _configure_gemini():
     """Help configure Gemini provider."""
     import os
-    
+
     console.print()
     console.print(Panel("Google Gemini Configuration", border_style="blue"))
     console.print()
-    
+
     api_key = os.environ.get("GOOGLE_API_KEY")
     if api_key:
         from .config import mask_api_key
@@ -810,7 +807,7 @@ def _configure_gemini():
         console.print("1. Get an API key from https://aistudio.google.com/apikey")
         console.print("2. Set the environment variable:")
         console.print("   [cyan]export GOOGLE_API_KEY='your-key'[/cyan]")
-    
+
     console.print()
 
 
@@ -819,15 +816,15 @@ def _configure_ollama():
     console.print()
     console.print(Panel("Ollama Local Configuration", border_style="blue"))
     console.print()
-    
+
     try:
         from .ai_providers.ollama_provider import OllamaProvider
         ollama = OllamaProvider()
-        
+
         if ollama.is_available():
             console.print("[green]✅ Ollama server is running[/green]")
             console.print()
-            
+
             # List available models
             try:
                 models = ollama.list_local_models()
@@ -849,7 +846,7 @@ def _configure_ollama():
             console.print("3. Pull a model: [cyan]ollama pull llama3.3[/cyan]")
     except Exception as e:
         console.print(f"[red]Error checking Ollama:[/red] {e}")
-    
+
     console.print()
 
 

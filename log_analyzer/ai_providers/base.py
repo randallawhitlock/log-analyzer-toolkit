@@ -10,8 +10,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Optional, Any
-
+from typing import Any
 
 __all__ = [
     "AIError",
@@ -38,8 +37,8 @@ class ProviderNotAvailableError(AIError):
 
 class RateLimitError(AIError):
     """Raised when rate limits are exceeded."""
-    
-    def __init__(self, message: str, retry_after: Optional[float] = None):
+
+    def __init__(self, message: str, retry_after: float | None = None):
         super().__init__(message)
         self.retry_after = retry_after
 
@@ -62,7 +61,7 @@ class Severity(str, Enum):
 class AIResponse:
     """
     Represents a response from an AI provider.
-    
+
     Attributes:
         content: The main text response from the AI
         model: The model that generated the response
@@ -76,15 +75,15 @@ class AIResponse:
     model: str
     provider: str
     usage: dict = field(default_factory=dict)
-    latency_ms: Optional[float] = None
+    latency_ms: float | None = None
     timestamp: datetime = field(default_factory=datetime.now)
-    raw_response: Optional[Any] = None
-    
+    raw_response: Any | None = None
+
     def __post_init__(self):
         """Ensure raw_response is not included in string representations."""
         # Prevent accidental logging of full response objects
         pass
-    
+
     def __repr__(self) -> str:
         """Return string representation without sensitive raw_response data."""
         return (
@@ -98,7 +97,7 @@ class AIResponse:
 class TriageIssue:
     """
     Represents a single triaged issue.
-    
+
     Attributes:
         title: Brief description of the issue
         severity: Issue severity level
@@ -115,7 +114,7 @@ class TriageIssue:
     affected_components: list[str] = field(default_factory=list)
     sample_logs: list[str] = field(default_factory=list)
     recommendation: str = ""
-    
+
     def __post_init__(self):
         """Validate confidence is in valid range."""
         if not 0.0 <= self.confidence <= 1.0:
@@ -126,7 +125,7 @@ class TriageIssue:
 class TriageResult:
     """
     Complete triage analysis result.
-    
+
     Attributes:
         summary: Human-readable summary of system health
         overall_severity: Overall system health severity
@@ -146,10 +145,10 @@ class TriageResult:
     analyzed_lines: int = 0
     error_count: int = 0
     warning_count: int = 0
-    analysis_time_ms: Optional[float] = None
+    analysis_time_ms: float | None = None
     provider_used: str = ""
     raw_analysis: str = ""
-    
+
     def to_dict(self) -> dict:
         """Convert to dictionary for JSON serialization."""
         return {
@@ -179,34 +178,34 @@ class TriageResult:
 class AIProvider(ABC):
     """
     Abstract base class for AI providers.
-    
+
     All AI providers must implement this interface to ensure
     consistent behavior across different backends.
-    
+
     Security Notes:
         - API keys should NEVER be logged or included in error messages
         - Log content should be sanitized before sending to cloud providers
         - Implement rate limiting to avoid excessive API costs
     """
-    
+
     # Provider identifier (must be set by subclasses)
     name: str = "base"
-    
+
     # Default model to use
     default_model: str = ""
-    
+
     @abstractmethod
-    def analyze(self, prompt: str, system_prompt: Optional[str] = None) -> AIResponse:
+    def analyze(self, prompt: str, system_prompt: str | None = None) -> AIResponse:
         """
         Send a prompt to the AI and get a response.
-        
+
         Args:
             prompt: The user prompt/question to send
             system_prompt: Optional system prompt for context
-            
+
         Returns:
             AIResponse containing the AI's response
-            
+
         Raises:
             ProviderNotAvailableError: If provider is not configured
             AuthenticationError: If API key is invalid
@@ -214,36 +213,36 @@ class AIProvider(ABC):
             AIError: For other AI-related errors
         """
         pass
-    
+
     @abstractmethod
     def is_available(self) -> bool:
         """
         Check if this provider is available and configured.
-        
+
         Returns:
             True if the provider can be used, False otherwise
         """
         pass
-    
+
     @abstractmethod
     def get_model(self) -> str:
         """
         Get the current model being used.
-        
+
         Returns:
             Model identifier string
         """
         pass
-    
-    def validate_api_key(self, api_key: Optional[str]) -> bool:
+
+    def validate_api_key(self, api_key: str | None) -> bool:
         """
         Validate that an API key is present and has valid format.
-        
+
         This does NOT verify the key with the provider, just checks format.
-        
+
         Args:
             api_key: The API key to validate
-            
+
         Returns:
             True if the key appears valid, False otherwise
         """
@@ -251,64 +250,64 @@ class AIProvider(ABC):
             return False
         # Basic validation - at least 20 characters, no whitespace
         return len(api_key) >= 20 and not any(c.isspace() for c in api_key)
-    
+
     def sanitize_log_content(self, content: str, max_length: int = 50000) -> str:
         """
         Sanitize log content before sending to AI provider.
-        
+
         This helps prevent:
         - Prompt injection attacks
         - Excessive token usage
         - Sending overly sensitive data
-        
+
         Args:
             content: Raw log content
             max_length: Maximum characters to include
-            
+
         Returns:
             Sanitized content safe for AI analysis
         """
         if not content:
             return ""
-        
+
         # Redact PII (Emails, IPv4, and IPv6)
         # Note: These are basic patterns and may not catch all edge cases
-        
+
         # Email: basic alphanumeric + @ + domain
         content = re.sub(
-            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b', 
-            '[EMAIL_REDACTED]', 
+            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
+            '[EMAIL_REDACTED]',
             content
         )
-        
+
         # IPv4: 4 groups of digits separated by dots
         content = re.sub(
-            r'\b(?:\d{1,3}\.){3}\d{1,3}\b', 
-            '[IP_REDACTED]', 
+            r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
+            '[IP_REDACTED]',
             content
         )
-        
+
         # IPv6: Full and compressed formats
         content = re.sub(
             r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b',  # Full
-            '[IP_REDACTED]', 
+            '[IP_REDACTED]',
             content
         )
         content = re.sub(
             r'\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b',  # Compressed end
-            '[IP_REDACTED]', 
+            '[IP_REDACTED]',
             content
         )
         content = re.sub(
             r'\b::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b',  # Compressed start
-            '[IP_REDACTED]', 
+            '[IP_REDACTED]',
             content
         )
-        
+
         # Truncate if too long
         if len(content) > max_length:
             content = content[:max_length] + f"\n\n[... truncated, {len(content) - max_length} more characters ...]"
-        
+
         # Remove potential prompt injection patterns
         # This is a basic safeguard - more sophisticated filtering may be needed
         dangerous_patterns = [
@@ -318,15 +317,15 @@ class AIProvider(ABC):
             "new instructions:",
             "system prompt:",
         ]
-        
+
         content_lower = content.lower()
         for pattern in dangerous_patterns:
             if pattern in content_lower:
                 # Don't remove, but wrap in a way that makes injection less likely
                 content = f"[LOG DATA START]\n{content}\n[LOG DATA END]"
                 break
-        
+
         return content
-    
+
     def __repr__(self) -> str:
         return f"{self.__class__.__name__}(model={self.get_model()})"

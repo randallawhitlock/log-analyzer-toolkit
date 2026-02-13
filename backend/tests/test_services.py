@@ -2,19 +2,19 @@
 Tests for service layer (AnalyzerService and TriageService).
 """
 
-import pytest
 import os
 import tempfile
 from io import BytesIO
+
+import pytest
 from fastapi import UploadFile
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
-from backend.db.database import Base
 from backend.db import crud
+from backend.db.database import Base
 from backend.services.analyzer_service import AnalyzerService
 from backend.services.triage_service import TriageService
-
 
 # Create test database
 TEST_DATABASE_URL = "sqlite:///:memory:"
