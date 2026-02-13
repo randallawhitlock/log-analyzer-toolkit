@@ -105,6 +105,29 @@ class TriageRequest(BaseModel):
     )
 
 
+class DeepDiveRequest(BaseModel):
+    """Schema for deep dive analysis of a specific issue."""
+    analysis_id: str
+    issue_title: str
+    issue_description: str
+    issue_severity: str
+    issue_recommendation: str
+    affected_components: List[str] = []
+    provider: Optional[str] = Field(
+        None,
+        description="AI provider to use. Auto-selects if not provided."
+    )
+
+
+class DeepDiveResponse(BaseModel):
+    """Schema for deep dive analysis result."""
+    issue_title: str
+    detailed_analysis: str
+    provider_used: str
+    model_used: str
+    analysis_time_ms: float
+
+
 class TriageResponse(BaseModel):
     """Schema for triage API response."""
     model_config = ConfigDict(from_attributes=True)

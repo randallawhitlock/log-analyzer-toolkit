@@ -202,6 +202,60 @@ def run_triage(
         raise HTTPException(status_code=500, detail=f"Triage failed: {str(e)}")
 
 
+@router.post("/triage/deep-dive", response_model=schemas.DeepDiveResponse, status_code=200)
+def deep_dive_issue(
+    request: schemas.DeepDiveRequest,
+    db: Session = Depends(get_db)
+):
+    """
+    Perform a deep-dive analysis on a specific triage issue.
+
+    Sends the issue back to the LLM for detailed resolution steps,
+    root cause analysis, verification steps, and prevention strategies.
+
+    **Parameters:**
+    - **analysis_id**: UUID of the original analysis
+    - **issue_title**: Title of the issue to analyze
+    - **issue_description**: Original issue description
+    - **issue_severity**: Severity level
+    - **issue_recommendation**: Original recommendation
+    - **affected_components**: List of affected components
+    - **provider**: Optional AI provider override
+
+    **Returns:**
+    - Detailed markdown analysis with actionable resolution steps
+    """
+    logger.info(f"POST /api/v1/triage/deep-dive - issue={request.issue_title}")
+
+    try:
+        service = TriageService(provider_name=request.provider)
+        result = service.deep_dive_issue(
+            db,
+            analysis_id=request.analysis_id,
+            issue_title=request.issue_title,
+            issue_description=request.issue_description,
+            issue_severity=request.issue_severity,
+            issue_recommendation=request.issue_recommendation,
+            affected_components=request.affected_components,
+            provider_name=request.provider,
+        )
+        logger.info(f"Deep dive completed for: {request.issue_title}")
+        return result
+
+    except ValueError as e:
+        logger.warning(f"Invalid deep dive request: {e}")
+        raise HTTPException(status_code=404, detail=str(e))
+    except ProviderNotAvailableError as e:
+        logger.error(f"AI provider not available: {e}")
+        raise HTTPException(
+            status_code=503,
+            detail=f"AI Service Unavailable: {str(e)}"
+        )
+    except Exception as e:
+        logger.error(f"Deep dive failed for {request.issue_title}: {e}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Deep dive failed: {str(e)}")
+
+
 @router.get("/triage/{triage_id}", response_model=schemas.TriageResponse)
 def get_triage(
     triage_id: str,
