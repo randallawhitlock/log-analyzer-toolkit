@@ -5,9 +5,10 @@ Demo script showing Phase 3B.1: Time-Series Analysis in action.
 Creates a sample log file and analyzes it with analytics enabled.
 """
 
-import tempfile
 import os
-from datetime import datetime, timedelta
+import tempfile
+from datetime import datetime
+
 from log_analyzer.analyzer import LogAnalyzer
 
 
@@ -55,8 +56,8 @@ def create_demo_log():
 
     print(f"✓ Created demo log: {filepath}")
     print(f"  Total entries: ~{sum(hour_patterns.values())}")
-    print(f"  Time range: 9am - 6pm")
-    print(f"  Expected burst: 3pm (50 errors)")
+    print("  Time range: 9am - 6pm")
+    print("  Expected burst: 3pm (50 errors)")
     print()
 
     return filepath
@@ -80,7 +81,7 @@ def analyze_with_analytics(filepath):
     )
 
     # Display results
-    print(f"\n📊 Basic Analysis Results:")
+    print("\n📊 Basic Analysis Results:")
     print(f"  Format: {result.detected_format}")
     print(f"  Total lines: {result.total_lines:,}")
     print(f"  Parsed lines: {result.parsed_lines:,}")
@@ -89,16 +90,16 @@ def analyze_with_analytics(filepath):
 
     # Display analytics
     if result.analytics:
-        print(f"\n📈 Time-Series Analytics:")
+        print("\n📈 Time-Series Analytics:")
         print(f"  Trend: {result.analytics.trend_direction}")
         print(f"  Peak period: {result.analytics.peak_period}")
 
-        print(f"\n⏰ Hourly Distribution:")
+        print("\n⏰ Hourly Distribution:")
         for hour, count in sorted(result.analytics.hourly_distribution.items()):
             bar = '█' * (count // 2)  # Simple bar chart
             print(f"    {hour:02d}:00 | {count:3d} | {bar}")
 
-        print(f"\n📅 Temporal Distribution (1-hour buckets):")
+        print("\n📅 Temporal Distribution (1-hour buckets):")
         for timestamp, count in sorted(result.analytics.temporal_distribution.items()):
             time_str = timestamp.split('T')[1][:5]  # Extract HH:MM
             bar = '█' * (count // 2)

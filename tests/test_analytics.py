@@ -5,13 +5,13 @@ Unit tests for advanced analytics module.
 from datetime import datetime, timedelta
 
 from log_analyzer.analytics import (
-    compute_temporal_distribution,
+    _calculate_slope,
+    _round_to_bucket,
+    compute_analytics,
     compute_hourly_distribution,
+    compute_temporal_distribution,
     detect_trend,
     identify_peak_period,
-    compute_analytics,
-    _round_to_bucket,
-    _calculate_slope,
 )
 from log_analyzer.parsers import LogEntry
 from log_analyzer.stats_models import AnalyticsData

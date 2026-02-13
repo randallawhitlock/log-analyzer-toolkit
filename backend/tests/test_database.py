@@ -2,14 +2,13 @@
 Tests for database models and CRUD operations.
 """
 
+
 import pytest
-from datetime import datetime, timedelta
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 
+from backend.db import crud
 from backend.db.database import Base
-from backend.db import models, crud
-
 
 # Create test database (in-memory SQLite)
 TEST_DATABASE_URL = "sqlite:///:memory:"

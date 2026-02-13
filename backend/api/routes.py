@@ -5,26 +5,25 @@ Provides REST API endpoints for log analysis and triage.
 """
 
 import logging
-from typing import Optional
-from fastapi import APIRouter, Depends, UploadFile, File, HTTPException, Query
+
+from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
 
-from log_analyzer.analyzer import AVAILABLE_PARSERS
-from log_analyzer.ai_providers.base import ProviderNotAvailableError
-from backend.db.database import get_db
-from backend.db import crud
 from backend.api import schemas
-from backend.services.analyzer_service import AnalyzerService
-from backend.services.triage_service import TriageService
 from backend.constants import (
     DEFAULT_MAX_ERRORS,
-    MAX_ERRORS_LIMIT,
-    MIN_ERRORS_LIMIT,
     DEFAULT_PAGE_SIZE,
+    MAX_ERRORS_LIMIT,
     MAX_PAGE_SIZE,
+    MIN_ERRORS_LIMIT,
     MIN_PAGE_SIZE,
 )
-
+from backend.db import crud
+from backend.db.database import get_db
+from backend.services.analyzer_service import AnalyzerService
+from backend.services.triage_service import TriageService
+from log_analyzer.ai_providers.base import ProviderNotAvailableError
+from log_analyzer.analyzer import AVAILABLE_PARSERS
 
 logger = logging.getLogger(__name__)
 
@@ -67,20 +66,20 @@ async def analyze_log_file(
 
     except ValueError as e:
         logger.warning(f"Invalid request for {file.filename}: {e}")
-        raise HTTPException(status_code=400, detail=str(e))
+        raise HTTPException(status_code=400, detail=str(e)) from e
     except FileNotFoundError as e:
         logger.error(f"File not found during analysis of {file.filename}: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Analysis failed for {file.filename}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}") from e
 
 
 @router.get("/analyses", response_model=schemas.AnalysisListResponse)
 def list_analyses(
     skip: int = Query(0, ge=0, description="Number of records to skip (offset)"),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=MIN_PAGE_SIZE, le=MAX_PAGE_SIZE, description=f"Maximum records to return ({MIN_PAGE_SIZE}-{MAX_PAGE_SIZE})"),
-    format: Optional[str] = Query(None, description="Filter by log format"),
+    format: str | None = Query(None, description="Filter by log format"),
     db: Session = Depends(get_db)
 ):
     """
@@ -190,16 +189,16 @@ def run_triage(
 
     except ValueError as e:
         logger.warning(f"Invalid triage request: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ProviderNotAvailableError as e:
         logger.error(f"AI provider not available: {e}")
         raise HTTPException(
             status_code=503,
             detail=f"AI Service Unavailable: {str(e)}. Please configure API keys or start Ollama."
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Triage failed for analysis {request.analysis_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Triage failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Triage failed: {str(e)}") from e
 
 
 @router.post("/triage/deep-dive", response_model=schemas.DeepDiveResponse, status_code=200)
@@ -244,16 +243,16 @@ def deep_dive_issue(
 
     except ValueError as e:
         logger.warning(f"Invalid deep dive request: {e}")
-        raise HTTPException(status_code=404, detail=str(e))
+        raise HTTPException(status_code=404, detail=str(e)) from e
     except ProviderNotAvailableError as e:
         logger.error(f"AI provider not available: {e}")
         raise HTTPException(
             status_code=503,
             detail=f"AI Service Unavailable: {str(e)}"
-        )
+        ) from e
     except Exception as e:
         logger.error(f"Deep dive failed for {request.issue_title}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Deep dive failed: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Deep dive failed: {str(e)}") from e
 
 
 @router.get("/triage/{triage_id}", response_model=schemas.TriageResponse)

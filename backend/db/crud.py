@@ -4,12 +4,11 @@ CRUD (Create, Read, Update, Delete) operations for database models.
 Provides helper functions for database operations.
 """
 
-from typing import List, Optional
-from sqlalchemy.orm import Session
+
 from sqlalchemy import desc
+from sqlalchemy.orm import Session
 
 from . import models
-
 
 # ==================== Analysis CRUD ====================
 
@@ -31,7 +30,7 @@ def create_analysis(db: Session, analysis_data: dict) -> models.Analysis:
     return analysis
 
 
-def get_analysis(db: Session, analysis_id: str) -> Optional[models.Analysis]:
+def get_analysis(db: Session, analysis_id: str) -> models.Analysis | None:
     """
     Get analysis by ID.
 
@@ -49,8 +48,8 @@ def get_analyses(
     db: Session,
     skip: int = 0,
     limit: int = 100,
-    format_filter: Optional[str] = None
-) -> List[models.Analysis]:
+    format_filter: str | None = None
+) -> list[models.Analysis]:
     """
     Get list of analyses with pagination and optional filtering.
 
@@ -71,7 +70,7 @@ def get_analyses(
     return query.order_by(desc(models.Analysis.created_at)).offset(skip).limit(limit).all()
 
 
-def get_analyses_count(db: Session, format_filter: Optional[str] = None) -> int:
+def get_analyses_count(db: Session, format_filter: str | None = None) -> int:
     """
     Get total count of analyses.
 
@@ -129,7 +128,7 @@ def create_triage(db: Session, triage_data: dict) -> models.Triage:
     return triage
 
 
-def get_triage(db: Session, triage_id: str) -> Optional[models.Triage]:
+def get_triage(db: Session, triage_id: str) -> models.Triage | None:
     """
     Get triage by ID.
 
@@ -143,7 +142,7 @@ def get_triage(db: Session, triage_id: str) -> Optional[models.Triage]:
     return db.query(models.Triage).filter(models.Triage.id == triage_id).first()
 
 
-def get_triages_by_analysis(db: Session, analysis_id: str) -> List[models.Triage]:
+def get_triages_by_analysis(db: Session, analysis_id: str) -> list[models.Triage]:
     """
     Get all triages for a specific analysis.
 

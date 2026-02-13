@@ -6,9 +6,10 @@ Creates a sample log file and generates reports in all supported formats
 with analytics visualization.
 """
 
-import tempfile
 import os
-from datetime import datetime, timedelta
+import tempfile
+from datetime import datetime
+
 from log_analyzer.analyzer import LogAnalyzer
 from log_analyzer.report import ReportGenerator
 
@@ -57,8 +58,8 @@ def create_demo_log():
 
     print(f"✓ Created demo log: {filepath}")
     print(f"  Total entries: ~{sum(hour_patterns.values())}")
-    print(f"  Time range: 9am - 6pm")
-    print(f"  Expected burst: 3pm (50 errors)")
+    print("  Time range: 9am - 6pm")
+    print("  Expected burst: 3pm (50 errors)")
     print()
 
     return filepath
@@ -81,7 +82,7 @@ def generate_all_reports(filepath):
         }
     )
 
-    print(f"\n📊 Analysis Complete:")
+    print("\n📊 Analysis Complete:")
     print(f"  Format: {result.detected_format}")
     print(f"  Total lines: {result.total_lines:,}")
     print(f"  Parsed lines: {result.parsed_lines:,}")
@@ -89,7 +90,7 @@ def generate_all_reports(filepath):
     print(f"  Time span: {result.time_span}")
 
     if result.analytics:
-        print(f"\n📈 Analytics:")
+        print("\n📈 Analytics:")
         print(f"  Trend: {result.analytics.trend_direction}")
         print(f"  Peak period: {result.analytics.peak_period}")
         print(f"  Active hours: {len(result.analytics.hourly_distribution)}")

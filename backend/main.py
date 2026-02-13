@@ -6,25 +6,25 @@ Main entry point for the REST API backend.
 
 # Load .env BEFORE any other imports to ensure env vars are available
 from pathlib import Path
+
 from dotenv import load_dotenv
+
 _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path, override=True)
 
-import logging
-from datetime import datetime
+import logging  # noqa: E402
+from datetime import datetime  # noqa: E402
 
-from fastapi import FastAPI, Request
-from fastapi.exceptions import RequestValidationError
-from fastapi.responses import JSONResponse
-from fastapi.middleware.cors import CORSMiddleware
-from starlette.middleware.base import BaseHTTPMiddleware
-from starlette.types import ASGIApp, Receive, Scope, Send
+from fastapi import FastAPI, Request  # noqa: E402
+from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
+from fastapi.responses import JSONResponse  # noqa: E402
+from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
+from starlette.types import ASGIApp  # noqa: E402
 
-from backend.db.database import init_db
-from backend.api.schemas import HealthResponse
-from backend.logging_middleware import StructuredLoggingMiddleware
-from backend.constants import MAX_UPLOAD_SIZE_BYTES, MAX_UPLOAD_SIZE_MB
-
+from backend.api.schemas import HealthResponse  # noqa: E402
+from backend.constants import MAX_UPLOAD_SIZE_BYTES, MAX_UPLOAD_SIZE_MB  # noqa: E402
+from backend.db.database import init_db  # noqa: E402
+from backend.logging_middleware import StructuredLoggingMiddleware  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
@@ -57,14 +57,13 @@ class LimitUploadSize(BaseHTTPMiddleware):
         self.max_upload_size = max_upload_size
 
     async def dispatch(self, request: Request, call_next):
-        if request.method == 'POST':
-            if 'content-length' in request.headers:
-                content_length = int(request.headers['content-length'])
-                if content_length > self.max_upload_size:
-                    return JSONResponse(
-                        status_code=413,
-                        content={"detail": f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB"}
-                    )
+        if request.method == 'POST' and 'content-length' in request.headers:
+            content_length = int(request.headers['content-length'])
+            if content_length > self.max_upload_size:
+                return JSONResponse(
+                    status_code=413,
+                    content={"detail": f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB"}
+                )
         return await call_next(request)
 
 # Enforce upload size limit
@@ -117,5 +116,6 @@ async def root():
 
 
 # Import and include routers
-from backend.api import routes
+from backend.api import routes  # noqa: E402
+
 app.include_router(routes.router)

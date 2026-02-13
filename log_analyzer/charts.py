@@ -6,7 +6,6 @@ analytics data in HTML reports.
 """
 
 import json
-from typing import Any
 
 
 def generate_chartjs_config(analytics) -> str:

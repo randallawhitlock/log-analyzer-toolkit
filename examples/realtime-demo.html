@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Real-Time Log Viewer - Demo</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Monaco', 'Consolas', monospace;
+            background: #1e1e1e;
+            color: #d4d4d4;
+            padding: 20px;
+        }
+        .container { max-width: 1400px; margin: 0 auto; }
+        h1 {
+            color: #569cd6;
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+        .panel {
+            background: #252526;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+            padding: 15px;
+            margin-bottom: 20px;
+        }
+        .panel h2 {
+            color: #4ec9b0;
+            font-size: 18px;
+            margin-bottom: 10px;
+        }
+        #log-viewer {
+            height: 400px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            padding: 10px;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+        }
+        .log-line {
+            padding: 4px 0;
+            border-bottom: 1px solid #2d2d30;
+            font-size: 13px;
+        }
+        .log-line:hover { background: #2d2d30; }
+        .log-timestamp { color: #858585; }
+        .log-level-ERROR { color: #f48771; font-weight: bold; }
+        .log-level-WARNING { color: #dcdcaa; }
+        .log-level-INFO { color: #4ec9b0; }
+        .log-level-DEBUG { color: #858585; }
+        #error-feed {
+            height: 200px;
+            overflow-y: auto;
+            background: #1e1e1e;
+            padding: 10px;
+            border: 1px solid #3e3e42;
+            border-radius: 4px;
+        }
+        .error-item {
+            background: #3a1d1d;
+            border-left: 3px solid #f48771;
+            padding: 8px;
+            margin-bottom: 8px;
+            border-radius: 2px;
+        }
+        .error-time { color: #858585; font-size: 12px; }
+        .error-message { color: #f48771; margin-top: 4px; }
+        .controls {
+            display: flex;
+            gap: 10px;
+            margin-bottom: 15px;
+        }
+        button {
+            background: #0e639c;
+            color: white;
+            border: none;
+            padding: 8px 16px;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: inherit;
+        }
+        button:hover { background: #1177bb; }
+        button:disabled {
+            background: #3e3e42;
+            color: #858585;
+            cursor: not-allowed;
+        }
+        .status {
+            display: inline-block;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            margin-right: 8px;
+        }
+        .status.connected { background: #4ec9b0; }
+        .status.disconnected { background: #858585; }
+        input[type="text"] {
+            background: #3c3c3c;
+            border: 1px solid #3e3e42;
+            color: #d4d4d4;
+            padding: 8px;
+            border-radius: 4px;
+            font-family: inherit;
+            flex: 1;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🚀 Log Analyzer Toolkit - Real-Time Viewer</h1>
+
+        <!-- WebSocket Log Tail -->
+        <div class="panel">
+            <h2>Live Log Tail (WebSocket)</h2>
+            <div class="controls">
+                <input type="text" id="file-path" placeholder="/app/uploads/application.log" value="/app/uploads/application.log">
+                <button id="connect-btn" onclick="connectWebSocket()">Connect</button>
+                <button id="disconnect-btn" onclick="disconnectWebSocket()" disabled>Disconnect</button>
+                <button onclick="clearLogs()">Clear</button>
+                <span><span class="status disconnected" id="ws-status"></span><span id="ws-text">Disconnected</span></span>
+            </div>
+            <div id="log-viewer"></div>
+        </div>
+
+        <!-- Server-Sent Events Error Feed -->
+        <div class="panel">
+            <h2>Error Stream (Server-Sent Events)</h2>
+            <div class="controls">
+                <button id="sse-connect-btn" onclick="connectSSE()">Start Monitoring</button>
+                <button id="sse-disconnect-btn" onclick="disconnectSSE()" disabled>Stop</button>
+                <span><span class="status disconnected" id="sse-status"></span><span id="sse-text">Disconnected</span></span>
+            </div>
+            <div id="error-feed"></div>
+        </div>
+    </div>
+
+    <script>
+        let ws = null;
+        let eventSource = null;
+        const API_URL = 'http://localhost:8000';
+
+        // WebSocket Connection
+        function connectWebSocket() {
+            const filePath = document.getElementById('file-path').value;
+
+            ws = new WebSocket(`ws://localhost:8000/realtime/ws/logs/tail`);
+
+            ws.onopen = () => {
+                console.log('WebSocket connected');
+                updateStatus('ws', true);
+                document.getElementById('connect-btn').disabled = true;
+                document.getElementById('disconnect-btn').disabled = false;
+
+                // Send file to tail
+                ws.send(JSON.stringify({
+                    file: filePath,
+                    lines: 50
+                }));
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+
+                if (data.error) {
+                    addLogLine('ERROR', data.error, 'ERROR');
+                    return;
+                }
+
+                if (data.type === 'log_line') {
+                    parseLine(data.line);
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('WebSocket error:', error);
+                addLogLine('ERROR', 'Connection error - make sure backend is running', 'ERROR');
+            };
+
+            ws.onclose = () => {
+                console.log('WebSocket disconnected');
+                updateStatus('ws', false);
+                document.getElementById('connect-btn').disabled = false;
+                document.getElementById('disconnect-btn').disabled = true;
+            };
+        }
+
+        function disconnectWebSocket() {
+            if (ws) {
+                ws.close();
+            }
+        }
+
+        // Server-Sent Events Connection
+        function connectSSE() {
+            eventSource = new EventSource(`${API_URL}/realtime/stream/errors`);
+
+            eventSource.onopen = () => {
+                console.log('SSE connected');
+                updateStatus('sse', true);
+                document.getElementById('sse-connect-btn').disabled = true;
+                document.getElementById('sse-disconnect-btn').disabled = false;
+            };
+
+            eventSource.onmessage = (event) => {
+                const error = JSON.parse(event.data);
+                addError(error);
+            };
+
+            eventSource.onerror = (error) => {
+                console.error('SSE error:', error);
+                updateStatus('sse', false);
+                document.getElementById('sse-connect-btn').disabled = false;
+                document.getElementById('sse-disconnect-btn').disabled = true;
+            };
+        }
+
+        function disconnectSSE() {
+            if (eventSource) {
+                eventSource.close();
+                updateStatus('sse', false);
+                document.getElementById('sse-connect-btn').disabled = false;
+                document.getElementById('sse-disconnect-btn').disabled = true;
+            }
+        }
+
+        // UI Updates
+        function addLogLine(timestamp, message, level = 'INFO') {
+            const viewer = document.getElementById('log-viewer');
+            const line = document.createElement('div');
+            line.className = 'log-line';
+
+            const ts = new Date(timestamp).toLocaleTimeString();
+
+            line.innerHTML = `
+                <span class="log-timestamp">[${ts}]</span>
+                <span class="log-level-${level}">[${level}]</span>
+                <span>${escapeHtml(message)}</span>
+            `;
+
+            viewer.appendChild(line);
+            viewer.scrollTop = viewer.scrollHeight;
+
+            // Keep only last 100 lines
+            while (viewer.children.length > 100) {
+                viewer.removeChild(viewer.firstChild);
+            }
+        }
+
+        function parseLine(line) {
+            // Simple parser - extract timestamp and level
+            const levelMatch = line.match(/\[(ERROR|WARNING|INFO|DEBUG)\]/i);
+            const level = levelMatch ? levelMatch[1].toUpperCase() : 'INFO';
+            const timestamp = new Date().toISOString();
+
+            addLogLine(timestamp, line, level);
+        }
+
+        function addError(error) {
+            const feed = document.getElementById('error-feed');
+            const item = document.createElement('div');
+            item.className = 'error-item';
+
+            const time = new Date(error.timestamp || Date.now()).toLocaleString();
+
+            item.innerHTML = `
+                <div class="error-time">${time}</div>
+                <div class="error-message">${escapeHtml(error.message || JSON.stringify(error))}</div>
+            `;
+
+            feed.insertBefore(item, feed.firstChild);
+
+            // Keep only last 20 errors
+            while (feed.children.length > 20) {
+                feed.removeChild(feed.lastChild);
+            }
+        }
+
+        function clearLogs() {
+            document.getElementById('log-viewer').innerHTML = '';
+        }
+
+        function updateStatus(type, connected) {
+            const status = document.getElementById(`${type}-status`);
+            const text = document.getElementById(`${type}-text`);
+
+            status.className = `status ${connected ? 'connected' : 'disconnected'}`;
+            text.textContent = connected ? 'Connected' : 'Disconnected';
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // Auto-connect on load (optional)
+        // window.onload = () => {
+        //     connectWebSocket();
+        //     connectSSE();
+        // };
+    </script>
+</body>
+</html>

@@ -9,47 +9,47 @@ import logging
 import os
 import time
 from collections import Counter
+from collections.abc import Iterator
 from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Iterator, Optional, Any
+from typing import Any
 
+from .constants import COUNTER_PRUNE_TO, DEFAULT_MAX_ERRORS, DEFAULT_SAMPLE_SIZE, MAX_COUNTER_SIZE
 from .parsers import (
-    BaseParser,
-    LogEntry,
-    AWSCloudWatchParser,
-    GCPCloudLoggingParser,
-    AzureMonitorParser,
-    DockerJSONParser,
-    KubernetesParser,
-    ContainerdParser,
+    AndroidParser,
     ApacheAccessParser,
     ApacheErrorParser,
+    AWSCloudWatchParser,
+    AzureMonitorParser,
+    BaseParser,
+    ContainerdParser,
+    DockerJSONParser,
+    GCPCloudLoggingParser,
+    HDFSParser,
+    HealthAppParser,
+    HPCParser,
+    JavaLogParser,
+    JSONLogParser,
+    KubernetesParser,
+    LogEntry,
     NginxAccessParser,
     NginxParser,
-    JSONLogParser,
-    SyslogParser,
-    AndroidParser,
-    JavaLogParser,
-    HDFSParser,
-    SupercomputerParser,
-    WindowsEventParser,
-    ProxifierParser,
-    HPCParser,
-    HealthAppParser,
     OpenStackParser,
+    ProxifierParser,
     SquidParser,
+    SupercomputerParser,
+    SyslogParser,
     UniversalFallbackParser,
-    CustomParserRegistry,
+    WindowsEventParser,
 )
 from .reader import LogReader
-from .constants import DEFAULT_SAMPLE_SIZE, DEFAULT_MAX_ERRORS, MAX_COUNTER_SIZE, COUNTER_PRUNE_TO
 
 # Analytics imports (optional, loaded on demand)
 try:
-    from .stats_models import AnalyticsData
     from .analytics import compute_analytics
+    from .stats_models import AnalyticsData
     ANALYTICS_AVAILABLE = True
 except ImportError:
     ANALYTICS_AVAILABLE = False
@@ -112,27 +112,27 @@ class AnalysisResult:
     total_lines: int
     parsed_lines: int
     failed_lines: int
-    
+
     # Severity breakdown
     level_counts: dict = field(default_factory=dict)
-    
+
     # Time range
-    earliest_timestamp: Optional[datetime] = None
-    latest_timestamp: Optional[datetime] = None
-    
+    earliest_timestamp: datetime | None = None
+    latest_timestamp: datetime | None = None
+
     # Error details
     errors: list = field(default_factory=list)
     warnings: list = field(default_factory=list)
-    
+
     # Pattern analysis
     top_sources: list = field(default_factory=list)
     top_errors: list = field(default_factory=list)
-    
+
     # HTTP specific (for access logs)
     status_codes: dict = field(default_factory=dict)
 
     # Advanced analytics (optional, Phase 3B)
-    analytics: Optional[Any] = None  # AnalyticsData when computed
+    analytics: Any | None = None  # AnalyticsData when computed
 
     @property
     def error_rate(self) -> float:
@@ -141,16 +141,16 @@ class AnalysisResult:
             return 0.0
         error_count = self.level_counts.get('ERROR', 0) + self.level_counts.get('CRITICAL', 0)
         return (error_count / self.parsed_lines) * 100
-    
+
     @property
     def parse_success_rate(self) -> float:
         """Calculate parse success rate as percentage."""
         if self.total_lines == 0:
             return 0.0
         return (self.parsed_lines / self.total_lines) * 100
-    
+
     @property
-    def time_span(self) -> Optional[timedelta]:
+    def time_span(self) -> timedelta | None:
         """Calculate time span of logs."""
         if self.earliest_timestamp and self.latest_timestamp:
             return self.latest_timestamp - self.earliest_timestamp
@@ -160,11 +160,11 @@ class AnalysisResult:
 class LogAnalyzer:
     """
     Main analysis engine for log files.
-    
+
     Handles format detection, parsing, and comprehensive analysis.
     """
-    
-    def __init__(self, parsers: list[BaseParser] = None, max_workers: Optional[int] = None):
+
+    def __init__(self, parsers: list[BaseParser] = None, max_workers: int | None = None):
         """
         Initialize the analyzer.
 
@@ -206,10 +206,10 @@ class LogAnalyzer:
             logger.debug(f"Pruned Counter from {max_size}+ items to {len(counter)} items")
 
     def _analyze_multithreaded(self, filepath: str, parser: BaseParser,
-                                max_errors: int, progress_callback: Optional[Any],
+                                max_errors: int, progress_callback: Any | None,
                                 chunk_size: int, start_time: float,
                                 enable_analytics: bool = False,
-                                analytics_config: Optional[dict] = None) -> AnalysisResult:
+                                analytics_config: dict | None = None) -> AnalysisResult:
         """
         Analyze log file using multithreaded processing.
 
@@ -299,7 +299,7 @@ class LogAnalyzer:
                              total_lines: int, chunk_results: list[dict],
                              max_errors: int, start_time: float,
                              enable_analytics: bool = False,
-                             analytics_config: Optional[dict] = None) -> AnalysisResult:
+                             analytics_config: dict | None = None) -> AnalysisResult:
         """
         Merge results from multiple chunk processing tasks.
 
@@ -343,12 +343,10 @@ class LogAnalyzer:
             warnings.extend(result['warnings'])
 
             # Track earliest/latest timestamps
-            if result['earliest']:
-                if earliest is None or result['earliest'] < earliest:
-                    earliest = result['earliest']
-            if result['latest']:
-                if latest is None or result['latest'] > latest:
-                    latest = result['latest']
+            if result['earliest'] and (earliest is None or result['earliest'] < earliest):
+                earliest = result['earliest']
+            if result['latest'] and (latest is None or result['latest'] > latest):
+                latest = result['latest']
 
         # Prune counters to prevent unbounded size
         self._prune_counter(source_counts)
@@ -477,7 +475,7 @@ class LogAnalyzer:
             'latest': latest,
         }
 
-    def detect_format(self, filepath: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> Optional[BaseParser]:
+    def detect_format(self, filepath: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> BaseParser | None:
         """
         Auto-detect the log format by sampling lines.
 
@@ -522,16 +520,16 @@ class LogAnalyzer:
                 return parser
 
         return None
-    
+
     def analyze(self, filepath: str, parser: BaseParser = None,
                 max_errors: int = DEFAULT_MAX_ERRORS,
-                progress_callback: Optional[Any] = None,
+                progress_callback: Any | None = None,
                 use_fallback: bool = True,
                 detect_inline: bool = True,
                 use_threading: bool = True,
                 chunk_size: int = 10000,
                 enable_analytics: bool = False,
-                analytics_config: Optional[dict] = None) -> AnalysisResult:
+                analytics_config: dict | None = None) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
 
@@ -606,20 +604,20 @@ class LogAnalyzer:
 
         # Fall back to single-threaded implementation
         reader = LogReader(filepath)
-        
+
         # Initialize counters
         total_lines = 0
         parsed_lines = 0
         failed_lines = 0
-        
+
         level_counts = Counter()
         status_codes = Counter()
         source_counts = Counter()
         error_messages = Counter()
-        
+
         errors = []
         warnings = []
-        
+
         earliest = None
         latest = None
 
@@ -726,27 +724,27 @@ class LogAnalyzer:
                 continue
 
             parsed_lines += 1
-            
+
             # Count levels
             if entry.level:
                 level_counts[entry.level] += 1
-            
+
             # Track timestamps
             if entry.timestamp:
                 if earliest is None or entry.timestamp < earliest:
                     earliest = entry.timestamp
                 if latest is None or entry.timestamp > latest:
                     latest = entry.timestamp
-            
+
             # Count sources
             if entry.source:
                 source_counts[entry.source] += 1
-            
+
             # Track HTTP status codes
             status = entry.metadata.get('status')
             if status:
                 status_codes[status] += 1
-            
+
             # Collect errors and warnings
             if entry.level in ('ERROR', 'CRITICAL'):
                 error_messages[entry.message] += 1
@@ -801,15 +799,15 @@ class LogAnalyzer:
         logger.debug(f"Top errors: {len(error_messages)} unique error messages")
 
         return result
-    
+
     def parse_file(self, filepath: str, parser: BaseParser = None) -> Iterator[LogEntry]:
         """
         Parse a log file and yield entries.
-        
+
         Args:
             filepath: Path to log file
             parser: Specific parser to use. Auto-detects if None.
-            
+
         Yields:
             Parsed LogEntry objects
         """
@@ -817,13 +815,13 @@ class LogAnalyzer:
             parser = self.detect_format(filepath)
             if parser is None:
                 raise ValueError(f"Could not detect log format for: {filepath}")
-        
+
         reader = LogReader(filepath)
-        
+
         for line in reader.read_lines():
             if not line.strip():
                 continue
-            
+
             entry = parser.parse(line)
             if entry:
                 yield entry

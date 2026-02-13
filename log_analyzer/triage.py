@@ -15,24 +15,21 @@ import json
 import logging
 import re
 import time
-from typing import Optional
 
-from .analyzer import AnalysisResult, LogAnalyzer
-from .ai_providers import get_provider, AIProvider
+from .ai_providers import AIProvider, get_provider
 from .ai_providers.base import (
     AIResponse,
-    AIError,
     Severity,
     TriageIssue,
     TriageResult,
 )
+from .analyzer import AnalysisResult, LogAnalyzer
 from .constants import (
-    MAX_MESSAGE_LENGTH,
-    DEFAULT_MAX_ERRORS,
     CHARS_PER_TOKEN,
+    DEFAULT_MAX_ERRORS,
     MAX_DISPLAY_ENTRIES,
+    MAX_MESSAGE_LENGTH,
 )
-
 
 logger = logging.getLogger(__name__)
 
@@ -115,7 +112,7 @@ def build_triage_prompt(result: AnalysisResult) -> str:
             pct = (count / result.parsed_lines * 100) if result.parsed_lines > 0 else 0
             severity_lines.append(f"- {level}: {count:,} ({pct:.1f}%)")
     severity_breakdown = "\n".join(severity_lines) or "- No severity levels detected"
-    
+
     # Build top errors list
     top_error_lines = []
     for msg, count in result.top_errors[:10]:
@@ -123,7 +120,7 @@ def build_triage_prompt(result: AnalysisResult) -> str:
         truncated = msg[:MAX_MESSAGE_LENGTH] + "..." if len(msg) > MAX_MESSAGE_LENGTH else msg
         top_error_lines.append(f"- [{count}x] {truncated}")
     top_errors = "\n".join(top_error_lines) or "- No errors detected"
-    
+
     # Build sample error entries
     sample_error_lines = []
     for entry in result.errors[:MAX_DISPLAY_ENTRIES]:
@@ -131,7 +128,7 @@ def build_triage_prompt(result: AnalysisResult) -> str:
         msg = entry.message[:200] + "..." if len(entry.message) > 200 else entry.message
         sample_error_lines.append(f"[{ts}] {entry.level}: {msg}")
     sample_errors = "\n".join(sample_error_lines) or "No error samples available"
-    
+
     # Format time range
     if result.time_span:
         time_range = str(result.time_span)
@@ -139,7 +136,7 @@ def build_triage_prompt(result: AnalysisResult) -> str:
         time_range = f"{result.earliest_timestamp} to {result.latest_timestamp}"
     else:
         time_range = "Unknown"
-    
+
     # Build the prompt
     prompt = TRIAGE_PROMPT_TEMPLATE.format(
         filepath=result.filepath,
@@ -208,14 +205,14 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
             provider_used=response.provider,
             raw_analysis=response.content,
         )
-    
+
     # Parse issues
     issues = []
     for issue_data in data.get("issues", []):
         try:
             severity_str = issue_data.get("severity", "MEDIUM").upper()
             severity = Severity(severity_str) if severity_str in Severity.__members__ else Severity.MEDIUM
-            
+
             issues.append(TriageIssue(
                 title=issue_data.get("title", "Unknown Issue"),
                 severity=severity,
@@ -225,10 +222,10 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
                 sample_logs=issue_data.get("sample_logs", []),
                 recommendation=issue_data.get("recommendation", ""),
             ))
-        except (ValueError, KeyError) as e:
+        except (ValueError, KeyError):
             # Skip malformed issues
             continue
-    
+
     # Parse overall severity
     overall_severity_str = data.get("overall_severity", "MEDIUM").upper()
     overall_severity = (
@@ -236,7 +233,7 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
         if overall_severity_str in Severity.__members__
         else Severity.MEDIUM
     )
-    
+
     return TriageResult(
         summary=data.get("summary", "Analysis completed"),
         overall_severity=overall_severity,
@@ -254,10 +251,10 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
 class TriageEngine:
     """
     AI-powered log triage engine.
-    
+
     Uses AI providers to intelligently analyze log files and
     provide structured triage results with actionable insights.
-    
+
     Example:
         ```python
         engine = TriageEngine()
@@ -267,15 +264,15 @@ class TriageEngine:
             print(f"[{issue.severity}] {issue.title}")
         ```
     """
-    
+
     def __init__(
         self,
-        provider: Optional[AIProvider] = None,
-        provider_name: Optional[str] = None,
+        provider: AIProvider | None = None,
+        provider_name: str | None = None,
     ):
         """
         Initialize the triage engine.
-        
+
         Args:
             provider: Specific AIProvider instance to use
             provider_name: Name of provider to use (anthropic, gemini, ollama)
@@ -284,7 +281,7 @@ class TriageEngine:
         self._provider = provider
         self._provider_name = provider_name
         self._analyzer = LogAnalyzer()
-    
+
     def _get_provider(self) -> AIProvider:
         """Get or create the AI provider."""
         if self._provider is not None:
@@ -295,11 +292,11 @@ class TriageEngine:
         self._provider = get_provider(self._provider_name)
         logger.info(f"AI provider initialized: {self._provider.name} ({self._provider.get_model()})")
         return self._provider
-    
+
     def triage(
         self,
         filepath: str,
-        parser: Optional[str] = None,
+        parser: str | None = None,
         max_errors: int = DEFAULT_MAX_ERRORS,
     ) -> TriageResult:
         """
@@ -355,42 +352,42 @@ class TriageEngine:
                    f"confidence={triage_result.confidence:.2f}")
 
         return triage_result
-    
+
     def triage_from_result(self, result: AnalysisResult) -> TriageResult:
         """
         Perform triage on an existing AnalysisResult.
-        
+
         Useful when you've already analyzed a log file and want
         to add AI triage without re-parsing.
-        
+
         Args:
             result: Existing AnalysisResult from LogAnalyzer
-            
+
         Returns:
             TriageResult with AI-powered analysis
         """
         # Build the prompt
         prompt = build_triage_prompt(result)
-        
+
         # Get AI provider and analyze
         provider = self._get_provider()
         prompt = provider.sanitize_log_content(prompt)
         response = provider.analyze(prompt, system_prompt=TRIAGE_SYSTEM_PROMPT)
-        
+
         return parse_triage_response(response, result)
 
 
 def quick_triage(
     filepath: str,
-    provider: Optional[str] = None,
+    provider: str | None = None,
 ) -> TriageResult:
     """
     Convenience function for quick log triage.
-    
+
     Args:
         filepath: Path to log file
         provider: Optional provider name (auto-detects if not specified)
-        
+
     Returns:
         TriageResult with AI analysis
     """

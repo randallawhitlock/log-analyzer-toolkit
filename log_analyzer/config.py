@@ -22,7 +22,6 @@ import stat
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
-from typing import Optional, Any
 
 # Try to import yaml, but make it optional
 try:
@@ -74,12 +73,12 @@ __all__ = [
 @dataclass
 class ProviderConfig:
     """Configuration for a single AI provider."""
-    
+
     enabled: bool = True
-    model: Optional[str] = None
-    api_key: Optional[str] = None  # Only for runtime use, never persisted
+    model: str | None = None
+    api_key: str | None = None  # Only for runtime use, never persisted
     extra: dict = field(default_factory=dict)
-    
+
     def __repr__(self) -> str:
         """Mask API key in string representation."""
         key_display = "***" if self.api_key else None
@@ -101,11 +100,11 @@ class Config:
         max_workers: Maximum number of worker threads for parallel processing
     """
 
-    default_provider: Optional[str] = None
+    default_provider: str | None = None
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
-    config_file: Optional[Path] = None
-    max_workers: Optional[int] = None  # None means use CPU count
-    
+    config_file: Path | None = None
+    max_workers: int | None = None  # None means use CPU count
+
     def __post_init__(self):
         """Initialize default provider configs if not provided."""
         for provider in ["anthropic", "gemini", "ollama"]:
@@ -113,14 +112,14 @@ class Config:
                 self.providers[provider] = ProviderConfig(
                     model=DEFAULT_MODELS.get(provider)
                 )
-    
+
     def get_provider_config(self, provider: str) -> ProviderConfig:
         """
         Get configuration for a specific provider.
-        
+
         Args:
             provider: Provider name (anthropic, gemini, ollama)
-            
+
         Returns:
             ProviderConfig for the provider
         """
@@ -129,18 +128,18 @@ class Config:
                 model=DEFAULT_MODELS.get(provider)
             )
         return self.providers[provider]
-    
-    def get_api_key(self, provider: str) -> Optional[str]:
+
+    def get_api_key(self, provider: str) -> str | None:
         """
         Get API key for a provider, checking config then environment.
-        
+
         Priority:
         1. ProviderConfig.api_key (if set at runtime)
         2. Environment variable
-        
+
         Args:
             provider: Provider name
-            
+
         Returns:
             API key if found, None otherwise
         """
@@ -148,27 +147,27 @@ class Config:
         config = self.get_provider_config(provider)
         if config.api_key:
             return config.api_key
-        
+
         # Check environment variable
         env_var = ENV_VARS.get(provider)
         if env_var:
             return os.environ.get(env_var)
-        
+
         return None
-    
+
     def get_model(self, provider: str) -> str:
         """
         Get model for a provider.
-        
+
         Args:
             provider: Provider name
-            
+
         Returns:
             Model identifier
         """
         config = self.get_provider_config(provider)
         return config.model or DEFAULT_MODELS.get(provider, "")
-    
+
     def to_dict(self) -> dict:
         """
         Convert config to dictionary for YAML serialization.
@@ -191,13 +190,13 @@ class Config:
         return result
 
 
-def mask_api_key(key: Optional[str]) -> str:
+def mask_api_key(key: str | None) -> str:
     """
     Mask an API key for safe display.
-    
+
     Args:
         key: API key to mask
-        
+
     Returns:
         Masked string showing only first 4 and last 4 characters
     """
@@ -211,36 +210,36 @@ def mask_api_key(key: Optional[str]) -> str:
 def check_config_permissions(path: Path) -> bool:
     """
     Check if config file has secure permissions.
-    
+
     Warnings are issued if the file is readable by others.
-    
+
     Args:
         path: Path to config file
-        
+
     Returns:
         True if permissions are secure, False otherwise
     """
     if not path.exists():
         return True
-    
+
     try:
         mode = path.stat().st_mode
-        
+
         # Check if group or others can read
         if mode & (stat.S_IRGRP | stat.S_IROTH):
             warnings.warn(
                 f"Config file {path} is readable by others. "
                 "Consider running: chmod 600 {path}",
-                UserWarning,
+                UserWarning, stacklevel=2,
             )
             return False
-        
+
         return True
     except OSError:
         return True  # Can't check, assume OK
 
 
-def load_config(path: Optional[Path] = None) -> Config:
+def load_config(path: Path | None = None) -> Config:
     """
     Load configuration from file and environment.
 
@@ -283,15 +282,15 @@ def load_config(path: Optional[Path] = None) -> Config:
             logger.info(f"Loaded configuration from {config_path}: "
                        f"default_provider={config.default_provider}, "
                        f"providers={list(providers_data.keys())}")
-        except (OSError, IOError) as e:
+        except OSError as e:
             logger.error(f"Failed to read config file {config_path}: {e}")
-            warnings.warn(f"Error loading config from {config_path}: {e}")
+            warnings.warn(f"Error loading config from {config_path}: {e}", stacklevel=2)
         except yaml.YAMLError as e:
             logger.error(f"Invalid YAML in config file {config_path}: {e}")
-            warnings.warn(f"Invalid YAML in {config_path}: {e}")
+            warnings.warn(f"Invalid YAML in {config_path}: {e}", stacklevel=2)
         except Exception as e:
             logger.error(f"Unexpected error loading config from {config_path}: {e}", exc_info=True)
-            warnings.warn(f"Error loading config from {config_path}: {e}")
+            warnings.warn(f"Error loading config from {config_path}: {e}", stacklevel=2)
     elif config_path.exists() and not YAML_AVAILABLE:
         logger.warning(f"Config file exists but PyYAML not installed: {config_path}")
     else:
@@ -315,7 +314,7 @@ def load_config(path: Optional[Path] = None) -> Config:
     return config
 
 
-def save_config(config: Config, path: Optional[Path] = None) -> Path:
+def save_config(config: Config, path: Path | None = None) -> Path:
     """
     Save configuration to file.
 
@@ -384,7 +383,7 @@ def reset_config():
 
 
 # Global config instance (lazy loaded)
-_config: Optional[Config] = None
+_config: Config | None = None
 
 
 def get_provider_status() -> dict[str, dict]:

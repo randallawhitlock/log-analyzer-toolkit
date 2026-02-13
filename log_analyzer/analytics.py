@@ -7,18 +7,14 @@ and pattern mining capabilities for log data.
 
 import logging
 import statistics
-from collections import Counter, defaultdict
+from collections import Counter
 from datetime import datetime, timedelta
-from typing import Optional, Any
 
-from .parsers import LogEntry
-from .stats_models import AnalyticsData
 from .constants import (
     DEFAULT_TIME_BUCKET_SIZE,
-    DEFAULT_ANOMALY_THRESHOLD,
-    DEFAULT_BURST_THRESHOLD,
 )
-
+from .parsers import LogEntry
+from .stats_models import AnalyticsData
 
 logger = logging.getLogger(__name__)
 
@@ -188,12 +184,12 @@ def _calculate_slope(x_values: list[float], y_values: list[float]) -> float:
     if not x_values or not y_values or len(x_values) != len(y_values):
         return 0.0
 
-    n = len(x_values)
+    len(x_values)
     x_mean = statistics.mean(x_values)
     y_mean = statistics.mean(y_values)
 
     # Calculate slope: sum((x - x_mean) * (y - y_mean)) / sum((x - x_mean)^2)
-    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values))
+    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=False))
     denominator = sum((x - x_mean) ** 2 for x in x_values)
 
     if denominator == 0:
@@ -202,7 +198,7 @@ def _calculate_slope(x_values: list[float], y_values: list[float]) -> float:
     return numerator / denominator
 
 
-def identify_peak_period(temporal_dist: dict[str, int]) -> Optional[str]:
+def identify_peak_period(temporal_dist: dict[str, int]) -> str | None:
     """
     Identify time period with highest activity.
 
@@ -236,7 +232,7 @@ def compute_analytics(
     warnings: list[LogEntry],
     level_counts: dict,
     source_counts: dict,
-    config: Optional[dict] = None
+    config: dict | None = None
 ) -> AnalyticsData:
     """
     Compute advanced analytics from log analysis data.
