@@ -55,3 +55,9 @@ make run
 ```
 
 The frontend will be available at `http://localhost:8080` and the API at `http://localhost:8000`.
+
+## Release Process
+
+1.  Update `pyproject.toml` version.
+2.  Create a pull request from `chore/release-vX.Y.Z`.
+3.  Once merged, create a GitHub release and tag `vX.Y.Z`.
