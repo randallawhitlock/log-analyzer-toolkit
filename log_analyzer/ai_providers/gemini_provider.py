@@ -13,6 +13,7 @@ Security Notes:
 import logging
 import os
 import time
+from typing import Optional
 
 from .base import (
     AIError,
@@ -58,8 +59,8 @@ class GeminiProvider(AIProvider):
 
     def __init__(
         self,
-        model: str | None = None,
-        api_key: str | None = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
         max_output_tokens: int = 4096,
         timeout: float = 120.0,
     ):
@@ -118,7 +119,7 @@ class GeminiProvider(AIProvider):
         genai.configure(api_key=self._api_key)
         self._configured = True
 
-    def _get_model(self, system_instruction: str | None = None):
+    def _get_model(self, system_instruction: Optional[str] = None):
         """
         Get or create the Gemini model instance.
 
@@ -185,7 +186,7 @@ class GeminiProvider(AIProvider):
         """
         return self._model
 
-    def analyze(self, prompt: str, system_prompt: str | None = None) -> AIResponse:
+    def analyze(self, prompt: str, system_prompt: Optional[str] = None) -> AIResponse:
         """
         Send a prompt to Gemini and get a response.
 

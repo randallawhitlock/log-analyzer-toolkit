@@ -15,6 +15,7 @@ import json
 import logging
 import re
 import time
+from typing import Optional
 
 from .ai_providers import AIProvider, get_provider
 from .ai_providers.base import (
@@ -35,21 +36,40 @@ logger = logging.getLogger(__name__)
 
 
 # System prompt for log triage
-TRIAGE_SYSTEM_PROMPT = """You are an expert systems engineer and log analyst. Your role is to analyze log data and provide intelligent triage to help identify and resolve system issues.
+TRIAGE_SYSTEM_PROMPT = """<system_instructions>
+<role>
+You are Claude Code - Senior Logic Analyst. Your goal is to provide rigorous, technical log analysis with the precision of a Principal Systems Engineer.
+</role>
 
-When analyzing logs, you should:
-1. Identify the most critical issues first
-2. Group related errors together
-3. Look for root causes, not just symptoms
-4. Consider temporal patterns and correlations
-5. Provide specific, actionable recommendations
+<tone_override>
+Maintain a strictly **Technical, Objective, and Concise** tone. Avoid conversational fillers, warm pleasantries, or natural language padding. Focus purely on data, logic, and solutions.
+</tone_override>
 
-Your analysis should be thorough but concise. Focus on what matters most for system health and stability.
+<standards>
+1. **Adaptive Thinking**: Assess the complexity of the log pattern. If the issue is complex, dynamically check deep root causes.
+2. **Atomic Atomicity**: Recommended fixes MUST be the smallest possible self-contained change. Avoid "rewrite" suggestions.
+3. **Regression Safety**: Explicitly verify that the proposed fix matches the specific error signature and introduces NO new side effects.
+4. **Error Handling**: Anticipate potential failures. Ensure recommended code handles null states, timeouts, and exceptions gracefully.
+5. **Evidence-Based**: Do not hallucinate. If the log data is insufficient, state "Insufficient Evidence" clearly.
+</standards>
 
-IMPORTANT: You must respond in valid JSON format matching the schema provided."""
+<thinking_process>
+Before generating the JSON output, you MUST perform the following adaptive reasoning steps in a <thinking> block:
+1. **Complexity Assessment**: Determine if this is a simple error or a complex system failure.
+2. **Pattern Analysis**: Deconstruct the log lines.
+3. **Root Cause Hypothesis**: Formulate 2-3 hypotheses.
+4. **Disproof & Verification**: Attempt to disprove your own hypotheses using the log data.
+5. **Edge Case Scan**: Explicitly scan for race conditions, timeouts, or rare states.
+6. **Solution Engineering**: Design a fix that follows the <standards> (Atomic, Verified).
+</thinking_process>
+
+<output_format>
+You must respond with a VALID JSON object matching the requested schema, wrapped in a markdown code block, preceded STRICTLY by your <thinking> block.
+</output_format>
+</system_instructions>"""
 
 
-TRIAGE_PROMPT_TEMPLATE = """Analyze the following log file summary and provide an intelligent triage assessment.
+TRIAGE_PROMPT_TEMPLATE = """Analyze the following log file summary and provide an intelligent triage assessment with root cause analysis.
 
 ## Log File Information
 - **File**: {filepath}
@@ -64,12 +84,32 @@ TRIAGE_PROMPT_TEMPLATE = """Analyze the following log file summary and provide a
 ## Top Errors ({error_count} total)
 {top_errors}
 
+## Top Warnings ({warning_count} total)
+{top_warnings}
+
+## Error Sources (components generating errors)
+{error_sources}
+
+## HTTP Status Codes
+{status_codes}
+
+## Temporal Patterns
+{temporal_patterns}
+
 ## Sample Error Entries
 {sample_errors}
 
+## Sample Warning Entries
+{sample_warnings}
+
 ---
 
-Please analyze this log data and respond with a JSON object matching this exact schema:
+Perform a thorough evaluation of the errors AND warnings. For each issue you identify:
+1. **Categorize** the issue type (e.g., connection_failure, auth_failure, resource_exhaustion, timeout, error_spike, data_corruption, configuration, dependency)
+2. **Analyze root cause** — correlate error patterns with source components, temporal clusters, and warning signals that preceded errors
+3. **Cite evidence** — reference specific log patterns, error messages, or temporal data that support your finding
+
+Respond with a JSON object matching this exact schema:
 
 ```json
 {{
@@ -80,16 +120,23 @@ Please analyze this log data and respond with a JSON object matching this exact 
     {{
       "title": "Brief issue title",
       "severity": "CRITICAL|HIGH|MEDIUM|LOW",
+      "category": "error_spike|connection_failure|auth_failure|resource_exhaustion|timeout|data_corruption|configuration|dependency|unknown",
       "confidence": 0.0 to 1.0,
       "description": "Detailed explanation of the issue",
+      "root_cause_analysis": "In-depth root cause analysis correlating error patterns, warning signals, source components, and temporal data. Explain WHY this is happening, not just WHAT.",
+      "evidence": ["Specific log pattern or entry 1", "Temporal correlation 2", "Warning signal 3"],
       "affected_components": ["component1", "component2"],
-      "recommendation": "Specific steps to resolve"
+      "recommendation": "Specific, actionable steps to resolve — smallest possible fix",
+      "git_actions": {{
+        "commit_message": "Conventional commit message (e.g. fix: handle null pointer...)",
+        "pr_description": "Markdown description for a Pull Request"
+      }}
     }}
   ]
 }}
 ```
 
-Respond with ONLY the JSON object, no additional text."""
+Respond with the valid JSON object wrapped in a code block, preceded by your <thinking> block."""
 
 
 def build_triage_prompt(result: AnalysisResult) -> str:
@@ -116,18 +163,77 @@ def build_triage_prompt(result: AnalysisResult) -> str:
     # Build top errors list
     top_error_lines = []
     for msg, count in result.top_errors[:10]:
-        # Truncate long messages
         truncated = msg[:MAX_MESSAGE_LENGTH] + "..." if len(msg) > MAX_MESSAGE_LENGTH else msg
         top_error_lines.append(f"- [{count}x] {truncated}")
     top_errors = "\n".join(top_error_lines) or "- No errors detected"
+
+    # Build top warnings list
+    top_warning_msgs = {}
+    for entry in result.warnings[:50]:
+        msg = entry.message[:MAX_MESSAGE_LENGTH]
+        top_warning_msgs[msg] = top_warning_msgs.get(msg, 0) + 1
+    top_warning_lines = []
+    for msg, count in sorted(top_warning_msgs.items(), key=lambda x: x[1], reverse=True)[:10]:
+        top_warning_lines.append(f"- [{count}x] {msg}")
+    top_warnings = "\n".join(top_warning_lines) or "- No warnings detected"
+
+    # Build error sources — correlate sources to error counts
+    error_source_lines = []
+    if result.top_sources:
+        for source, count in result.top_sources[:10]:
+            error_source_lines.append(f"- {source}: {count:,} entries")
+    error_sources = "\n".join(error_source_lines) or "- No source data available"
+
+    # Build HTTP status codes
+    status_code_lines = []
+    if result.status_codes:
+        for code, count in sorted(result.status_codes.items(),
+                                   key=lambda x: x[1], reverse=True)[:10]:
+            indicator = "⚠️" if str(code).startswith(('4', '5')) else "✓"
+            status_code_lines.append(f"- {indicator} HTTP {code}: {count:,}")
+    status_codes = "\n".join(status_code_lines) or "- No HTTP status code data"
+
+    # Build temporal patterns from analytics
+    temporal_lines = []
+    if result.analytics:
+        analytics = result.analytics
+        if hasattr(analytics, 'error_rate_trend') and analytics.error_rate_trend:
+            temporal_lines.append(f"- Error rate trend: {analytics.error_rate_trend}")
+        if hasattr(analytics, 'temporal_distribution') and analytics.temporal_distribution:
+            # Show top time buckets with most activity
+            sorted_buckets = sorted(
+                analytics.temporal_distribution.items(),
+                key=lambda x: x[1], reverse=True
+            )[:5]
+            for ts, count in sorted_buckets:
+                temporal_lines.append(f"- {ts}: {count:,} entries")
+        if hasattr(analytics, 'hourly_distribution') and analytics.hourly_distribution:
+            # Find peak hours
+            peak_hours = sorted(
+                analytics.hourly_distribution.items(),
+                key=lambda x: x[1], reverse=True
+            )[:3]
+            for hour, count in peak_hours:
+                temporal_lines.append(f"- Peak hour {hour}:00: {count:,} entries")
+    temporal_patterns = "\n".join(temporal_lines) or "- No temporal data available"
 
     # Build sample error entries
     sample_error_lines = []
     for entry in result.errors[:MAX_DISPLAY_ENTRIES]:
         ts = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") if entry.timestamp else "---"
         msg = entry.message[:200] + "..." if len(entry.message) > 200 else entry.message
-        sample_error_lines.append(f"[{ts}] {entry.level}: {msg}")
+        source = f" ({entry.source})" if entry.source else ""
+        sample_error_lines.append(f"[{ts}] {entry.level}{source}: {msg}")
     sample_errors = "\n".join(sample_error_lines) or "No error samples available"
+
+    # Build sample warning entries
+    sample_warning_lines = []
+    for entry in result.warnings[:MAX_DISPLAY_ENTRIES]:
+        ts = entry.timestamp.strftime("%Y-%m-%d %H:%M:%S") if entry.timestamp else "---"
+        msg = entry.message[:200] + "..." if len(entry.message) > 200 else entry.message
+        source = f" ({entry.source})" if entry.source else ""
+        sample_warning_lines.append(f"[{ts}] {entry.level}{source}: {msg}")
+    sample_warnings = "\n".join(sample_warning_lines) or "No warning samples available"
 
     # Format time range
     if result.time_span:
@@ -147,7 +253,13 @@ def build_triage_prompt(result: AnalysisResult) -> str:
         severity_breakdown=severity_breakdown,
         error_count=len(result.errors),
         top_errors=top_errors,
+        warning_count=len(result.warnings),
+        top_warnings=top_warnings,
+        error_sources=error_sources,
+        status_codes=status_codes,
+        temporal_patterns=temporal_patterns,
         sample_errors=sample_errors,
+        sample_warnings=sample_warnings,
     )
 
     # Estimate token count
@@ -221,6 +333,10 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
                 affected_components=issue_data.get("affected_components", []),
                 sample_logs=issue_data.get("sample_logs", []),
                 recommendation=issue_data.get("recommendation", ""),
+                git_actions=issue_data.get("git_actions"),
+                root_cause_analysis=issue_data.get("root_cause_analysis", ""),
+                category=issue_data.get("category", "unknown"),
+                evidence=issue_data.get("evidence", []),
             ))
         except (ValueError, KeyError):
             # Skip malformed issues
@@ -267,8 +383,8 @@ class TriageEngine:
 
     def __init__(
         self,
-        provider: AIProvider | None = None,
-        provider_name: str | None = None,
+        provider: Optional[AIProvider] = None,
+        provider_name: Optional[str] = None,
     ):
         """
         Initialize the triage engine.
@@ -296,7 +412,7 @@ class TriageEngine:
     def triage(
         self,
         filepath: str,
-        parser: str | None = None,
+        parser: Optional[str] = None,
         max_errors: int = DEFAULT_MAX_ERRORS,
     ) -> TriageResult:
         """
@@ -379,7 +495,7 @@ class TriageEngine:
 
 def quick_triage(
     filepath: str,
-    provider: str | None = None,
+    provider: Optional[str] = None,
 ) -> TriageResult:
     """
     Convenience function for quick log triage.

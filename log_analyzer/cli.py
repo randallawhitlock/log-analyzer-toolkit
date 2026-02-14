@@ -668,11 +668,34 @@ def _display_triage(result, filepath: str):
         for i, issue in enumerate(result.issues, 1):
             issue_color = severity_colors.get(issue.severity, 'white')
 
-            # Issue header
+            # Build issue content with new fields
+            category_badge = f"[dim]Category: {issue.category}[/dim]\n\n" if issue.category and issue.category != "unknown" else ""
+
+            content_parts = [
+                f"[bold]{issue.title}[/bold]\n",
+                category_badge,
+                f"{issue.description}\n",
+            ]
+
+            # Root cause analysis section
+            if issue.root_cause_analysis:
+                content_parts.append(
+                    f"\n[bold]🔬 Root Cause Analysis:[/bold]\n{issue.root_cause_analysis}\n"
+                )
+
+            # Evidence section
+            if issue.evidence:
+                evidence_text = "\n".join(f"  • {e}" for e in issue.evidence)
+                content_parts.append(
+                    f"\n[bold]📋 Evidence:[/bold]\n{evidence_text}\n"
+                )
+
+            content_parts.append(
+                f"\n[bold]Recommendation:[/bold] {issue.recommendation}"
+            )
+
             console.print(Panel(
-                f"[bold]{issue.title}[/bold]\n\n"
-                f"{issue.description}\n\n"
-                f"[bold]Recommendation:[/bold] {issue.recommendation}",
+                "".join(content_parts),
                 title=f"Issue {i} - {Text(issue.severity.value, style=issue_color)} "
                       f"(Confidence: {issue.confidence:.0%})",
                 border_style=issue_color,

@@ -12,6 +12,7 @@ Privacy Notes:
 
 import logging
 import time
+from typing import Optional
 
 from .base import (
     AIError,
@@ -56,8 +57,8 @@ class OllamaProvider(AIProvider):
 
     def __init__(
         self,
-        model: str | None = None,
-        host: str | None = None,
+        model: Optional[str] = None,
+        host: Optional[str] = None,
         timeout: float = 300.0,  # Larger timeout for local models
     ):
         """
@@ -187,7 +188,7 @@ class OllamaProvider(AIProvider):
         except Exception as e:
             raise AIError(f"Failed to list Ollama models: {e}") from e
 
-    def analyze(self, prompt: str, system_prompt: str | None = None) -> AIResponse:
+    def analyze(self, prompt: str, system_prompt: Optional[str] = None) -> AIResponse:
         """
         Send a prompt to Ollama and get a response.
 
@@ -272,7 +273,7 @@ class OllamaProvider(AIProvider):
         except Exception as e:
             raise AIError(f"Unexpected error calling Ollama: {type(e).__name__}") from e
 
-    def pull_model(self, model: str | None = None) -> bool:
+    def pull_model(self, model: Optional[str] = None) -> bool:
         """
         Pull a model to local Ollama installation.
 

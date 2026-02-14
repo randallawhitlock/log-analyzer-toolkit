@@ -71,7 +71,7 @@ addopts = [
     "--cov-report=html",
     "--cov-report=term",
     "--cov-report=term-missing",
-    "--cov-fail-under=55",
+    "--cov-fail-under=90",
 ]
 
 [tool.coverage.run]
@@ -113,7 +113,7 @@ module = [
 ignore_missing_imports = true
 
 [tool.ruff]
-target-version = "py310"
+target-version = "py39"
 line-length = 120
 exclude = [
     "venv",

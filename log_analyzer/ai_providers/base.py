@@ -1,3 +1,4 @@
+
 """
 Base classes and interfaces for AI providers.
 
@@ -10,7 +11,7 @@ from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
 from datetime import datetime
 from enum import Enum
-from typing import Any
+from typing import Any, Optional
 
 __all__ = [
     "AIError",
@@ -38,7 +39,7 @@ class ProviderNotAvailableError(AIError):
 class RateLimitError(AIError):
     """Raised when rate limits are exceeded."""
 
-    def __init__(self, message: str, retry_after: float | None = None):
+    def __init__(self, message: str, retry_after: Optional[float] = None):
         super().__init__(message)
         self.retry_after = retry_after
 
@@ -75,9 +76,9 @@ class AIResponse:
     model: str
     provider: str
     usage: dict = field(default_factory=dict)
-    latency_ms: float | None = None
+    latency_ms: Optional[float] = None
     timestamp: datetime = field(default_factory=datetime.now)
-    raw_response: Any | None = None
+    raw_response: Optional[Any] = None
 
     def __post_init__(self):
         """Ensure raw_response is not included in string representations."""
@@ -106,6 +107,9 @@ class TriageIssue:
         affected_components: List of affected system components
         sample_logs: Representative log entries for this issue
         recommendation: Suggested remediation steps
+        root_cause_analysis: Detailed root cause with evidence from log patterns
+        category: Issue category (error_spike, connection_failure, auth_failure, etc.)
+        evidence: Specific log patterns or entries supporting this finding
     """
     title: str
     severity: Severity
@@ -114,6 +118,10 @@ class TriageIssue:
     affected_components: list[str] = field(default_factory=list)
     sample_logs: list[str] = field(default_factory=list)
     recommendation: str = ""
+    git_actions: Optional[dict] = None  # { "commit_message": str, "pr_description": str }
+    root_cause_analysis: str = ""
+    category: str = "unknown"
+    evidence: list[str] = field(default_factory=list)
 
     def __post_init__(self):
         """Validate confidence is in valid range."""
@@ -145,7 +153,7 @@ class TriageResult:
     analyzed_lines: int = 0
     error_count: int = 0
     warning_count: int = 0
-    analysis_time_ms: float | None = None
+    analysis_time_ms: Optional[float] = None
     provider_used: str = ""
     raw_analysis: str = ""
 
@@ -164,6 +172,10 @@ class TriageResult:
                     "affected_components": issue.affected_components,
                     "sample_logs": issue.sample_logs,
                     "recommendation": issue.recommendation,
+                    "git_actions": issue.git_actions,
+                    "root_cause_analysis": issue.root_cause_analysis,
+                    "category": issue.category,
+                    "evidence": issue.evidence,
                 }
                 for issue in self.issues
             ],
@@ -195,7 +207,7 @@ class AIProvider(ABC):
     default_model: str = ""
 
     @abstractmethod
-    def analyze(self, prompt: str, system_prompt: str | None = None) -> AIResponse:
+    def analyze(self, prompt: str, system_prompt: Optional[str] = None) -> AIResponse:
         """
         Send a prompt to the AI and get a response.
 
@@ -234,7 +246,7 @@ class AIProvider(ABC):
         """
         pass
 
-    def validate_api_key(self, api_key: str | None) -> bool:
+    def validate_api_key(self, api_key: Optional[str]) -> bool:
         """
         Validate that an API key is present and has valid format.
 

@@ -12,6 +12,7 @@ Security Notes:
 
 import os
 import time
+from typing import Optional
 
 from .base import (
     AIError,
@@ -50,8 +51,8 @@ class AnthropicProvider(AIProvider):
 
     def __init__(
         self,
-        model: str | None = None,
-        api_key: str | None = None,
+        model: Optional[str] = None,
+        api_key: Optional[str] = None,
         max_tokens: int = 4096,
         timeout: float = 120.0,
     ):
@@ -145,7 +146,7 @@ class AnthropicProvider(AIProvider):
         """
         return self._model
 
-    def analyze(self, prompt: str, system_prompt: str | None = None) -> AIResponse:
+    def analyze(self, prompt: str, system_prompt: Optional[str] = None) -> AIResponse:
         """
         Send a prompt to Claude and get a response.
 

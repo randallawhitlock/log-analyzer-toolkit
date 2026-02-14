@@ -5,6 +5,7 @@ Wraps the existing TriageEngine from CLI tool and adapts it for API use.
 """
 
 import logging
+from typing import Optional
 
 from sqlalchemy.orm import Session
 
@@ -23,7 +24,7 @@ class TriageService:
     Wraps TriageEngine and provides database persistence.
     """
 
-    def __init__(self, provider_name: str | None = None):
+    def __init__(self, provider_name: Optional[str] = None):
         """
         Initialize triage service.
 
@@ -79,7 +80,10 @@ class TriageService:
                 "confidence": issue.confidence,
                 "description": issue.description,
                 "affected_components": issue.affected_components,
-                "recommendation": issue.recommendation
+                "recommendation": issue.recommendation,
+                "root_cause_analysis": issue.root_cause_analysis,
+                "category": issue.category,
+                "evidence": issue.evidence,
             })
 
         return {
@@ -97,7 +101,7 @@ class TriageService:
         self,
         db: Session,
         analysis_id: str,
-        provider_name: str | None = None
+        provider_name: Optional[str] = None
     ) -> models.Triage:
         """
         Run AI triage on an existing analysis.
@@ -160,7 +164,7 @@ class TriageService:
         issue_severity: str,
         issue_recommendation: str,
         affected_components: list[str],
-        provider_name: str | None = None,
+        provider_name: Optional[str] = None,
     ) -> dict:
         """
         Perform a deep dive analysis on a specific triage issue.
@@ -208,16 +212,33 @@ class TriageService:
 
 ---
 
-Please provide a comprehensive deep-dive analysis with the following sections:
+Please provide a comprehensive deep-dive analysis following the **Claude Opus 4.6 Agentic Workflow**.
+
+First, begin with a **Reasoning & Verification** section where you:
+1. **Assess Task Complexity**: Determine the depth of reasoning required.
+2. **Deconstruct Context**: Analyze the provided issue details against the log evidence.
+3. **Brainstorm Root Causes**: Generate multiple hypotheses and rule them out.
+4. **Edge Case Analysis**: List at least 3 specific edge cases (race conditions, state desync, etc.).
+5. **Agentic Planning**: Plan a multi-step verification strategy.
+6. **Reflexion (Self-Correction)**:
+    - Critique your own plan. Identify 3 potential failure modes or security risks.
+    - Refine the plan to address these weaknesses.
+7. **Deployment Strategy**:
+    - If a code fix is required, draft a **Git Commit Message** following **Conventional Commits** (e.g., `fix(auth): handle null token in validation`).
+    - Draft a **Pull Request Description** with sections: 'Summary', 'Test Plan', and 'Risk Assessment'.
+    - Ensure the PR strategy favors **Atomic Commits** (small, focused changes).
+
+Then, provide the structured response with the following sections logic:
 
 ### Root Cause Analysis
-Explain the most likely root cause(s) of this issue in detail.
+Explain the most likely root cause(s) of this issue in detail, referencing specific evidence. **Use Chain of Density**: Start with a high-level summary, then iteratively add technical details and exact code references to increase information density without adding fluff.
 
-### Step-by-Step Resolution
-Provide exact, actionable steps to fix this issue. Include specific commands, configuration changes, or code fixes where applicable. Use code blocks for any commands or configurations.
+### Agentic Resolution Plan
+Provide exact, actionable steps to fix this issue. Break down the fix into atomic units if complex.
 
-### Verification Steps
+### Verification Steps (Test Plan)
 How to verify the fix worked. Include commands to run, logs to check, or metrics to monitor.
+**MANDATORY**: Confirm that new tests cover the fixed logic (Goal: 100% patch coverage).
 
 ### Prevention Strategies
 How to prevent this issue from recurring. Include monitoring recommendations, alerting thresholds, or architectural improvements.

@@ -5,7 +5,7 @@ These schemas define the structure of data sent to and returned from API endpoin
 """
 
 from datetime import datetime
-from typing import Any
+from typing import Any, Optional
 
 from pydantic import BaseModel, ConfigDict, Field
 
@@ -35,9 +35,9 @@ class AnalysisCreate(BaseModel):
     top_errors: list[list[Any]]
     top_sources: list[list[Any]]
     status_codes: dict[int, int]
-    earliest_timestamp: datetime | None = None
-    latest_timestamp: datetime | None = None
-    time_span: str | None = None
+    earliest_timestamp: Optional[datetime] = None
+    latest_timestamp: Optional[datetime] = None
+    time_span: Optional[str] = None
     file_path: str
 
 
@@ -57,9 +57,9 @@ class AnalysisResponse(BaseModel):
     top_errors: list[list[Any]]
     top_sources: list[list[Any]]
     status_codes: dict[int, int]
-    earliest_timestamp: datetime | None = None
-    latest_timestamp: datetime | None = None
-    time_span: str | None = None
+    earliest_timestamp: Optional[datetime] = None
+    latest_timestamp: Optional[datetime] = None
+    time_span: Optional[str] = None
     created_at: datetime
 
 
@@ -93,13 +93,13 @@ class TriageCreate(BaseModel):
     issues: list[dict[str, Any]]
     provider_used: str
     analysis_time_ms: float
-    raw_analysis: str | None = None
+    raw_analysis: Optional[str] = None
 
 
 class TriageRequest(BaseModel):
     """Schema for triage request."""
     analysis_id: str
-    provider: str | None = Field(
+    provider: Optional[str] = Field(
         None,
         description="AI provider to use (anthropic, gemini, ollama). Auto-selects if not provided."
     )
@@ -113,7 +113,7 @@ class DeepDiveRequest(BaseModel):
     issue_severity: str
     issue_recommendation: str
     affected_components: list[str] = []
-    provider: str | None = Field(
+    provider: Optional[str] = Field(
         None,
         description="AI provider to use. Auto-selects if not provided."
     )
@@ -148,7 +148,7 @@ class TriageResponse(BaseModel):
 class ErrorResponse(BaseModel):
     """Schema for error responses."""
     detail: str
-    error_type: str | None = None
+    error_type: Optional[str] = None
 
 
 class SuccessResponse(BaseModel):

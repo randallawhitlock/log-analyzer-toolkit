@@ -6,6 +6,7 @@ configuration and auto-detect available providers.
 """
 
 import logging
+from typing import Optional
 
 from ..config import get_config
 from .base import AIProvider, ProviderNotAvailableError
@@ -104,8 +105,8 @@ def list_configured_providers() -> list[str]:
 
 
 def get_provider(
-    name: str | None = None,
-    model: str | None = None,
+    name: Optional[str] = None,
+    model: Optional[str] = None,
     **kwargs
 ) -> AIProvider:
     """

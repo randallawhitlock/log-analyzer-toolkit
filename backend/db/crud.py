@@ -5,6 +5,11 @@ Provides helper functions for database operations.
 """
 
 
+
+
+
+from typing import Optional
+
 from sqlalchemy import desc
 from sqlalchemy.orm import Session
 
@@ -30,7 +35,7 @@ def create_analysis(db: Session, analysis_data: dict) -> models.Analysis:
     return analysis
 
 
-def get_analysis(db: Session, analysis_id: str) -> models.Analysis | None:
+def get_analysis(db: Session, analysis_id: str) -> Optional[models.Analysis]:
     """
     Get analysis by ID.
 
@@ -48,7 +53,7 @@ def get_analyses(
     db: Session,
     skip: int = 0,
     limit: int = 100,
-    format_filter: str | None = None
+    format_filter: Optional[str] = None
 ) -> list[models.Analysis]:
     """
     Get list of analyses with pagination and optional filtering.
@@ -70,7 +75,7 @@ def get_analyses(
     return query.order_by(desc(models.Analysis.created_at)).offset(skip).limit(limit).all()
 
 
-def get_analyses_count(db: Session, format_filter: str | None = None) -> int:
+def get_analyses_count(db: Session, format_filter: Optional[str] = None) -> int:
     """
     Get total count of analyses.
 
@@ -128,7 +133,7 @@ def create_triage(db: Session, triage_data: dict) -> models.Triage:
     return triage
 
 
-def get_triage(db: Session, triage_id: str) -> models.Triage | None:
+def get_triage(db: Session, triage_id: str) -> Optional[models.Triage]:
     """
     Get triage by ID.
 

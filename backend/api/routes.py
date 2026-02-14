@@ -5,6 +5,7 @@ Provides REST API endpoints for log analysis and triage.
 """
 
 import logging
+from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
 from sqlalchemy.orm import Session
@@ -79,7 +80,7 @@ async def analyze_log_file(
 def list_analyses(
     skip: int = Query(0, ge=0, description="Number of records to skip (offset)"),
     limit: int = Query(DEFAULT_PAGE_SIZE, ge=MIN_PAGE_SIZE, le=MAX_PAGE_SIZE, description=f"Maximum records to return ({MIN_PAGE_SIZE}-{MAX_PAGE_SIZE})"),
-    format: str | None = Query(None, description="Filter by log format"),
+    format: Optional[str] = Query(None, description="Filter by log format"),
     db: Session = Depends(get_db)
 ):
     """

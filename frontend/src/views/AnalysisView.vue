@@ -152,9 +152,26 @@
               <span class="issue-severity" :class="`severity-${issue.severity?.toLowerCase()}`">
                 {{ issue.severity }}
               </span>
+              <span v-if="issue.category && issue.category !== 'unknown'" class="issue-category">
+                {{ formatCategory(issue.category) }}
+              </span>
               <span class="issue-title">{{ issue.title }}</span>
             </div>
             <div class="issue-description markdown-content" v-html="renderMarkdown(issue.description)"></div>
+            
+            <!-- Root Cause Analysis -->
+            <div v-if="issue.root_cause_analysis" class="issue-root-cause">
+              <strong>🔬 Root Cause Analysis:</strong>
+              <div class="markdown-content" v-html="renderMarkdown(issue.root_cause_analysis)"></div>
+            </div>
+
+            <!-- Evidence -->
+            <div v-if="issue.evidence && issue.evidence.length > 0" class="issue-evidence">
+              <strong>📋 Evidence:</strong>
+              <ul class="evidence-list">
+                <li v-for="(item, i) in issue.evidence" :key="i">{{ item }}</li>
+              </ul>
+            </div>
             <div v-if="issue.recommendation" class="issue-recommendation">
               <strong>💡 Recommendation:</strong>
               <div class="markdown-content" v-html="renderMarkdown(issue.recommendation)"></div>
@@ -265,6 +282,11 @@ const formatDate = (dateStr) => {
 const truncate = (str, len) => {
   if (!str || str.length <= len) return str
   return str.substring(0, len) + '...'
+}
+
+const formatCategory = (category) => {
+  if (!category) return ''
+  return category.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
 const runTriageAnalysis = async () => {
@@ -705,6 +727,15 @@ onMounted(async () => {
   font-weight: 600;
 }
 
+.issue-category {
+  background: var(--color-bg-secondary, #1a1a2e);
+  border: 1px solid var(--color-border, #3a3a55);
+  padding: 4px 10px;
+  border-radius: 4px;
+  font-size: 11px;
+  color: var(--color-text-muted, #aaa);
+}
+
 .issue-title {
   font-weight: 600;
 }
@@ -713,6 +744,40 @@ onMounted(async () => {
   margin: 0 0 12px 0;
   color: var(--color-text-muted, #aaa);
   line-height: 1.5;
+}
+
+.issue-root-cause {
+  margin: 12px 0;
+  padding: 12px;
+  background: var(--color-bg-secondary, #1a1a2e);
+  border: 1px solid var(--color-border, #3a3a55);
+  border-radius: 8px;
+}
+
+.issue-root-cause strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--color-primary, #646cff);
+}
+
+.issue-evidence {
+  margin: 12px 0;
+}
+
+.issue-evidence strong {
+  display: block;
+  margin-bottom: 8px;
+  color: var(--color-text, #fff);
+}
+
+.evidence-list {
+  margin: 0;
+  padding-left: 20px;
+  color: var(--color-text-muted, #aaa);
+}
+
+.evidence-list li {
+  margin-bottom: 4px;
 }
 
 .issue-recommendation {
