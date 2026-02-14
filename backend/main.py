@@ -32,9 +32,9 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Log Analyzer Toolkit API",
     description="REST API for analyzing and troubleshooting log files",
-    version="0.1.0",
+    version="0.2.0",
     docs_url="/docs",
-    redoc_url="/redoc"
+    redoc_url="/redoc",
 )
 
 # Configure CORS
@@ -57,14 +57,14 @@ class LimitUploadSize(BaseHTTPMiddleware):
         self.max_upload_size = max_upload_size
 
     async def dispatch(self, request: Request, call_next):
-        if request.method == 'POST' and 'content-length' in request.headers:
-            content_length = int(request.headers['content-length'])
+        if request.method == "POST" and "content-length" in request.headers:
+            content_length = int(request.headers["content-length"])
             if content_length > self.max_upload_size:
                 return JSONResponse(
-                    status_code=413,
-                    content={"detail": f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB"}
+                    status_code=413, content={"detail": f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB"}
                 )
         return await call_next(request)
+
 
 # Enforce upload size limit
 app.add_middleware(LimitUploadSize, max_upload_size=MAX_UPLOAD_SIZE_BYTES)
@@ -91,11 +91,7 @@ async def health_check():
     Returns:
         HealthResponse: Current health status and version
     """
-    return HealthResponse(
-        status="healthy",
-        version="0.1.0",
-        timestamp=datetime.utcnow()
-    )
+    return HealthResponse(status="healthy", version="0.2.0", timestamp=datetime.utcnow())
 
 
 # Root endpoint
@@ -107,12 +103,7 @@ async def root():
     Returns:
         dict: API information
     """
-    return {
-        "message": "Log Analyzer Toolkit API",
-        "version": "0.1.0",
-        "docs": "/docs",
-        "health": "/health"
-    }
+    return {"message": "Log Analyzer Toolkit API", "version": "0.2.0", "docs": "/docs", "health": "/health"}
 
 
 # Import and include routers

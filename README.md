@@ -138,7 +138,36 @@ python -m log_analyzer triage /var/log/error.log --json
 python -m log_analyzer triage /var/log/secure.log --provider ollama
 ```
 
-### Step 4: Python Integration
+### Step 3.5: Real-Time Analysis (Live Tail) [NEW]
+
+Watch logs stream in real-time as they are written to the server.
+
+1.  Open an analysis in the web interface.
+2.  Click the **🔴 Live Tail** button in the header.
+3.  Logs will appear instantly.
+    - **Pause/Resume**: Stop scrolling to inspect logs.
+    - **Filter**: Enter a regex pattern to show only matching lines.
+
+### Step 4: Developer Workflow (Auto-Reload)
+
+We have streamlined the development process with a `Makefile` and Docker integration.
+
+**Run with Auto-Reload (Recommended):**
+The server will automatically restart when you make code changes.
+```bash
+make run
+```
+*Access Frontend at: http://localhost:5173*
+*Access Backend at: http://localhost:8000*
+
+**Other Useful Commands:**
+```bash
+make test       # Run full test suite
+make lint       # Check code style
+make clean      # Remove build artifacts
+```
+
+### Step 5: Python Integration
 
 Integrate the analyzer directly into your monitoring scripts or dashboards.
 
