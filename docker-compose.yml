@@ -1,35 +1,32 @@
-# Minimal deployment - just the app
+version: '3.8'
+
 services:
   backend:
     build:
       context: .
-      dockerfile: Dockerfile.backend
+      dockerfile: backend/Dockerfile
     ports:
       - "8000:8000"
     volumes:
-      - ./uploads:/app/uploads
-      - ./log_analyzer.db:/app/log_analyzer.db
+      - ./backend/uploads:/app/backend/uploads
     environment:
-      - PYTHONUNBUFFERED=1
-      # Optional: Connect to existing services via env vars
-      # - DATABASE_URL=${DATABASE_URL:-sqlite:///./log_analyzer.db}
-      # - REDIS_URL=${REDIS_URL}
-      # - ELASTICSEARCH_URL=${ELASTICSEARCH_URL}
+      - LOG_ANALYZER_MAX_WORKERS=4
     restart: unless-stopped
-    healthcheck:
-      test: ["CMD", "curl", "-f", "http://localhost:8000/health"]
-      interval: 30s
-      timeout: 10s
-      retries: 3
+    networks:
+      - log-analyzer-net
 
   frontend:
     build:
-      context: .
-      dockerfile: Dockerfile.frontend
+      context: ./frontend
+      dockerfile: Dockerfile
     ports:
-      - "5173:5173"
+      - "8080:80"
     depends_on:
       - backend
-    environment:
-      - VITE_API_URL=http://localhost:8000
     restart: unless-stopped
+    networks:
+      - log-analyzer-net
+
+networks:
+  log-analyzer-net:
+    driver: bridge
