@@ -22,6 +22,7 @@ import stat
 import warnings
 from dataclasses import dataclass, field
 from pathlib import Path
+from typing import Optional
 
 # Try to import yaml, but make it optional
 try:
@@ -75,8 +76,8 @@ class ProviderConfig:
     """Configuration for a single AI provider."""
 
     enabled: bool = True
-    model: str | None = None
-    api_key: str | None = None  # Only for runtime use, never persisted
+    model: Optional[str] = None
+    api_key: Optional[str] = None  # Only for runtime use, never persisted
     extra: dict = field(default_factory=dict)
 
     def __repr__(self) -> str:
@@ -100,10 +101,10 @@ class Config:
         max_workers: Maximum number of worker threads for parallel processing
     """
 
-    default_provider: str | None = None
+    default_provider: Optional[str] = None
     providers: dict[str, ProviderConfig] = field(default_factory=dict)
-    config_file: Path | None = None
-    max_workers: int | None = None  # None means use CPU count
+    config_file: Optional[Path] = None
+    max_workers: Optional[int] = None  # None means use CPU count
 
     def __post_init__(self):
         """Initialize default provider configs if not provided."""
@@ -129,7 +130,7 @@ class Config:
             )
         return self.providers[provider]
 
-    def get_api_key(self, provider: str) -> str | None:
+    def get_api_key(self, provider: str) -> Optional[str]:
         """
         Get API key for a provider, checking config then environment.
 
@@ -190,7 +191,7 @@ class Config:
         return result
 
 
-def mask_api_key(key: str | None) -> str:
+def mask_api_key(key: Optional[str]) -> str:
     """
     Mask an API key for safe display.
 
@@ -239,7 +240,7 @@ def check_config_permissions(path: Path) -> bool:
         return True  # Can't check, assume OK
 
 
-def load_config(path: Path | None = None) -> Config:
+def load_config(path: Optional[Path] = None) -> Config:
     """
     Load configuration from file and environment.
 
@@ -314,7 +315,7 @@ def load_config(path: Path | None = None) -> Config:
     return config
 
 
-def save_config(config: Config, path: Path | None = None) -> Path:
+def save_config(config: Config, path: Optional[Path] = None) -> Path:
     """
     Save configuration to file.
 
@@ -383,7 +384,7 @@ def reset_config():
 
 
 # Global config instance (lazy loaded)
-_config: Config | None = None
+_config: Optional[Config] = None
 
 
 def get_provider_status() -> dict[str, dict]:

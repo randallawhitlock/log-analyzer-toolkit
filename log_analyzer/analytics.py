@@ -9,6 +9,7 @@ import logging
 import statistics
 from collections import Counter
 from datetime import datetime, timedelta
+from typing import Optional
 
 from .constants import (
     DEFAULT_TIME_BUCKET_SIZE,
@@ -189,7 +190,7 @@ def _calculate_slope(x_values: list[float], y_values: list[float]) -> float:
     y_mean = statistics.mean(y_values)
 
     # Calculate slope: sum((x - x_mean) * (y - y_mean)) / sum((x - x_mean)^2)
-    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values, strict=False))
+    numerator = sum((x - x_mean) * (y - y_mean) for x, y in zip(x_values, y_values))
     denominator = sum((x - x_mean) ** 2 for x in x_values)
 
     if denominator == 0:
@@ -198,7 +199,7 @@ def _calculate_slope(x_values: list[float], y_values: list[float]) -> float:
     return numerator / denominator
 
 
-def identify_peak_period(temporal_dist: dict[str, int]) -> str | None:
+def identify_peak_period(temporal_dist: dict[str, int]) -> Optional[str]:
     """
     Identify time period with highest activity.
 
@@ -232,7 +233,7 @@ def compute_analytics(
     warnings: list[LogEntry],
     level_counts: dict,
     source_counts: dict,
-    config: dict | None = None
+    config: Optional[dict] = None
 ) -> AnalyticsData:
     """
     Compute advanced analytics from log analysis data.

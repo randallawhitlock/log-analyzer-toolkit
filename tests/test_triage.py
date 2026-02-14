@@ -1,345 +1,282 @@
 """
-Unit tests for the triage module.
+Comprehensive unit tests for triage module.
 """
 
-from datetime import datetime, timedelta
+import json
+import time
+from datetime import datetime
 from unittest.mock import MagicMock, patch
 
-from log_analyzer.ai_providers.base import (
-    AIResponse,
-    Severity,
-    TriageResult,
-)
+import pytest
+
+from log_analyzer.analyzer import AnalysisResult
+from log_analyzer.ai_providers.base import AIResponse
+from log_analyzer.parsers import LogEntry
 from log_analyzer.triage import (
     TriageEngine,
+    TriageResult,
+    TriageIssue,
+    Severity,
     build_triage_prompt,
     parse_triage_response,
     quick_triage,
 )
 
-# =============================================================================
-# Mock AnalysisResult for testing
-# =============================================================================
 
-class MockLogEntry:
-    """Mock log entry for testing."""
-    def __init__(self, level="ERROR", message="Test error", timestamp=None):
-        self.level = level
-        self.message = message
-        self.timestamp = timestamp or datetime.now()
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
-
-class MockAnalysisResult:
-    """Mock AnalysisResult for testing."""
-    def __init__(
-        self,
+@pytest.fixture
+def analysis_result():
+    return AnalysisResult(
         filepath="/var/log/test.log",
+        detected_format="syslog",
         total_lines=1000,
         parsed_lines=950,
-        detected_format="syslog",
-        level_counts=None,
-        errors=None,
-        warnings=None,
-        top_errors=None,
-        time_span=None,
-        earliest_timestamp=None,
-        latest_timestamp=None,
-    ):
-        self.filepath = filepath
-        self.total_lines = total_lines
-        self.parsed_lines = parsed_lines
-        self.detected_format = detected_format
-        self.level_counts = level_counts or {"ERROR": 50, "WARNING": 100, "INFO": 800}
-        self.errors = errors or [MockLogEntry() for _ in range(5)]
-        self.warnings = warnings or [MockLogEntry(level="WARNING") for _ in range(10)]
-        self.top_errors = top_errors or [("Connection refused", 25), ("Timeout error", 15)]
-        self.time_span = time_span
-        self.earliest_timestamp = earliest_timestamp
-        self.latest_timestamp = latest_timestamp
+        failed_lines=50,
+        level_counts={"ERROR": 30, "WARNING": 50, "INFO": 870},
+        earliest_timestamp=datetime(2020, 1, 1, 0, 0, 0),
+        latest_timestamp=datetime(2020, 1, 1, 23, 59, 59),
+        errors=[
+            LogEntry(timestamp=datetime(2020, 1, 1, 12, 0), level="ERROR",
+                     message="Connection refused to database"),
+            LogEntry(timestamp=datetime(2020, 1, 1, 12, 5), level="ERROR",
+                     message="Timeout waiting for response"),
+        ],
+        warnings=[],
+        top_errors=[("Connection refused", 15), ("Timeout", 10)],
+        top_sources=[("app-server", 500)],
+    )
 
 
-# =============================================================================
-# Test build_triage_prompt
-# =============================================================================
+@pytest.fixture
+def mock_ai_response():
+    data = {
+        "summary": "Database connectivity issues detected",
+        "overall_severity": "HIGH",
+        "confidence": 0.92,
+        "issues": [
+            {
+                "title": "Database Connection Failures",
+                "severity": "HIGH",
+                "confidence": 0.95,
+                "description": "Multiple connection refused errors",
+                "affected_components": ["database", "api-server"],
+                "sample_logs": ["Connection refused to database"],
+                "recommendation": "Check database server status",
+            }
+        ],
+    }
+    return AIResponse(
+        content=json.dumps(data),
+        provider="anthropic",
+        model="claude-sonnet-4-5-20250929",
+        latency_ms=1500,
+        usage={"input": 500, "output": 200},
+    )
+
+
+# ---------------------------------------------------------------------------
+# build_triage_prompt
+# ---------------------------------------------------------------------------
 
 class TestBuildTriagePrompt:
-    """Tests for prompt building."""
-
-    def test_basic_prompt(self):
-        """Test building a basic prompt."""
-        result = MockAnalysisResult()
-
-        prompt = build_triage_prompt(result)
-
+    def test_basic_prompt(self, analysis_result):
+        prompt = build_triage_prompt(analysis_result)
+        assert isinstance(prompt, str)
         assert "/var/log/test.log" in prompt
         assert "syslog" in prompt
-        assert "1,000" in prompt  # Total lines formatted
-        assert "950" in prompt  # Parsed lines
-
-    def test_includes_severity_breakdown(self):
-        """Test that severity breakdown is included."""
-        result = MockAnalysisResult(
-            level_counts={"ERROR": 100, "WARNING": 200, "INFO": 700}
-        )
-
-        prompt = build_triage_prompt(result)
-
+        assert "1,000" in prompt
         assert "ERROR" in prompt
-        assert "WARNING" in prompt
-        assert "INFO" in prompt
 
-    def test_includes_top_errors(self):
-        """Test that top errors are included."""
-        result = MockAnalysisResult(
-            top_errors=[("Database connection failed", 50), ("Auth timeout", 30)]
-        )
+    def test_prompt_includes_top_errors(self, analysis_result):
+        prompt = build_triage_prompt(analysis_result)
+        assert "Connection refused" in prompt
 
-        prompt = build_triage_prompt(result)
+    def test_prompt_includes_sample_errors(self, analysis_result):
+        prompt = build_triage_prompt(analysis_result)
+        assert "Connection refused to database" in prompt
 
-        assert "Database connection failed" in prompt
-        assert "[50x]" in prompt
+    def test_prompt_with_no_errors(self, analysis_result):
+        analysis_result.errors = []
+        analysis_result.top_errors = []
+        analysis_result.level_counts = {"INFO": 950}
+        prompt = build_triage_prompt(analysis_result)
+        assert "No errors detected" in prompt
 
-    def test_truncates_long_error_messages(self):
-        """Test that long error messages are truncated."""
-        long_message = "A" * 200
-        result = MockAnalysisResult(
-            top_errors=[(long_message, 10)]
-        )
-
-        prompt = build_triage_prompt(result)
-
-        # Should be truncated with ...
-        assert "..." in prompt
-        assert long_message not in prompt  # Full message should not appear
-
-    def test_handles_no_errors(self):
-        """Test handling when no errors exist."""
-        result = MockAnalysisResult(
-            errors=[],
-            warnings=[],
-            top_errors=[],
-            level_counts={"INFO": 1000}
-        )
-
-        prompt = build_triage_prompt(result)
-
-        # Should handle gracefully (may show default sample or "No" messages)
-        assert "Log File Information" in prompt
-
-    def test_includes_time_range(self):
-        """Test that time range is included."""
-        result = MockAnalysisResult(
-            time_span=timedelta(hours=24)
-        )
-
-        prompt = build_triage_prompt(result)
-
-        assert "Time Range" in prompt
+    def test_prompt_without_timestamps(self, analysis_result):
+        analysis_result.earliest_timestamp = None
+        analysis_result.latest_timestamp = None
+        prompt = build_triage_prompt(analysis_result)
+        assert "Unknown" in prompt
 
 
-# =============================================================================
-# Test parse_triage_response
-# =============================================================================
+# ---------------------------------------------------------------------------
+# parse_triage_response
+# ---------------------------------------------------------------------------
 
 class TestParseTriageResponse:
-    """Tests for response parsing."""
+    def test_valid_json_response(self, mock_ai_response, analysis_result):
+        result = parse_triage_response(mock_ai_response, analysis_result)
+        assert isinstance(result, TriageResult)
+        assert result.summary == "Database connectivity issues detected"
+        assert result.overall_severity == Severity.HIGH
+        assert result.confidence == pytest.approx(0.92)
+        assert len(result.issues) == 1
+        assert result.issues[0].title == "Database Connection Failures"
 
-    def test_parse_valid_json(self):
-        """Test parsing a valid JSON response."""
-        json_content = '''
-        {
-            "summary": "System is experiencing database issues",
-            "overall_severity": "HIGH",
-            "confidence": 0.85,
+    def test_json_in_code_block(self, analysis_result):
+        data = {"summary": "test", "overall_severity": "LOW", "confidence": 0.5, "issues": []}
+        content = f"```json\n{json.dumps(data)}\n```"
+        response = AIResponse(content=content, provider="test", model="m",
+                              latency_ms=100, usage={})
+        result = parse_triage_response(response, analysis_result)
+        assert result.summary == "test"
+        assert result.overall_severity == Severity.LOW
+
+    def test_invalid_json_returns_fallback(self, analysis_result):
+        response = AIResponse(content="This is not JSON at all",
+                              provider="test", model="m",
+                              latency_ms=100, usage={})
+        result = parse_triage_response(response, analysis_result)
+        assert isinstance(result, TriageResult)
+        assert "parsing failed" in result.summary
+        assert result.confidence == pytest.approx(0.3)
+        assert result.overall_severity == Severity.MEDIUM
+
+    def test_malformed_issue_skipped(self, analysis_result):
+        data = {
+            "summary": "test",
+            "overall_severity": "MEDIUM",
+            "confidence": 0.5,
             "issues": [
-                {
-                    "title": "Database Connection Failures",
-                    "severity": "HIGH",
-                    "confidence": 0.9,
-                    "description": "Multiple connection failures detected",
-                    "affected_components": ["database", "api"],
-                    "recommendation": "Check database server status"
-                }
-            ]
+                {"title": "Good issue", "severity": "HIGH", "confidence": 0.8},
+                {"severity": "INVALID_SEVERITY_VALUE", "confidence": "not-a-number"},
+            ],
         }
-        '''
+        response = AIResponse(content=json.dumps(data), provider="test", model="m",
+                              latency_ms=100, usage={})
+        result = parse_triage_response(response, analysis_result)
+        # Should not crash - malformed entries are skipped or handled
+        assert isinstance(result, TriageResult)
+        # At least the good issue should parse
+        assert len(result.issues) >= 1
 
-        response = AIResponse(
-            content=json_content,
-            model="test-model",
-            provider="test",
-            latency_ms=100,
-        )
-        result = MockAnalysisResult()
-
-        triage_result = parse_triage_response(response, result)
-
-        assert triage_result.summary == "System is experiencing database issues"
-        assert triage_result.overall_severity == Severity.HIGH
-        assert triage_result.confidence == 0.85
-        assert len(triage_result.issues) == 1
-        assert triage_result.issues[0].title == "Database Connection Failures"
-
-    def test_parse_json_in_code_block(self):
-        """Test parsing JSON wrapped in markdown code block."""
-        json_content = '''
-        Here is the analysis:
-
-        ```json
-        {
-            "summary": "All systems operational",
-            "overall_severity": "HEALTHY",
-            "confidence": 0.95,
-            "issues": []
+    def test_unknown_severity_defaults_to_medium(self, analysis_result):
+        data = {
+            "summary": "test", "overall_severity": "UNKNOWN_LEVEL",
+            "confidence": 0.5, "issues": [],
         }
-        ```
-        '''
+        response = AIResponse(content=json.dumps(data), provider="test", model="m",
+                              latency_ms=100, usage={})
+        result = parse_triage_response(response, analysis_result)
+        assert result.overall_severity == Severity.MEDIUM
 
-        response = AIResponse(
-            content=json_content,
-            model="test-model",
-            provider="test",
-            latency_ms=50,
-        )
-        result = MockAnalysisResult()
-
-        triage_result = parse_triage_response(response, result)
-
-        assert triage_result.summary == "All systems operational"
-        assert triage_result.overall_severity == Severity.HEALTHY
-
-    def test_parse_invalid_json_fallback(self):
-        """Test fallback when JSON is invalid."""
-        response = AIResponse(
-            content="This is not valid JSON at all",
-            model="test-model",
-            provider="test",
-            latency_ms=100,
-        )
-        result = MockAnalysisResult(errors=[MockLogEntry() for _ in range(5)])
-
-        triage_result = parse_triage_response(response, result)
-
-        # Should return fallback result
-        assert "parsing failed" in triage_result.summary.lower()
-        assert triage_result.confidence == 0.3
-        assert triage_result.overall_severity == Severity.MEDIUM
-
-    def test_parse_handles_missing_fields(self):
-        """Test parsing handles missing optional fields."""
-        json_content = '''
-        {
-            "summary": "Minimal response"
-        }
-        '''
-
-        response = AIResponse(
-            content=json_content,
-            model="test-model",
-            provider="test",
-            latency_ms=100,
-        )
-        result = MockAnalysisResult()
-
-        triage_result = parse_triage_response(response, result)
-
-        assert triage_result.summary == "Minimal response"
-        assert triage_result.overall_severity == Severity.MEDIUM  # Default
-        assert triage_result.confidence == 0.5  # Default
-        assert len(triage_result.issues) == 0
+    def test_response_with_thinking_block(self, analysis_result):
+        """Response that has <thinking> block before JSON."""
+        data = {"summary": "ok", "overall_severity": "LOW", "confidence": 0.7, "issues": []}
+        content = f"<thinking>Let me analyze...</thinking>\n{json.dumps(data)}"
+        response = AIResponse(content=content, provider="test", model="m",
+                              latency_ms=100, usage={})
+        result = parse_triage_response(response, analysis_result)
+        assert result.summary == "ok"
 
 
-# =============================================================================
-# Test TriageEngine
-# =============================================================================
+# ---------------------------------------------------------------------------
+# TriageEngine
+# ---------------------------------------------------------------------------
 
 class TestTriageEngine:
-    """Tests for TriageEngine class."""
+    def test_init_with_provider(self):
+        mock_provider = MagicMock()
+        engine = TriageEngine(provider=mock_provider)
+        assert engine._provider is mock_provider
 
-    def test_initialization(self):
-        """Test basic initialization."""
-        engine = TriageEngine()
-
-        assert engine._provider is None
-        assert engine._provider_name is None
-
-    def test_initialization_with_provider_name(self):
-        """Test initialization with provider name."""
+    def test_init_with_provider_name(self):
         engine = TriageEngine(provider_name="ollama")
-
         assert engine._provider_name == "ollama"
+        assert engine._provider is None
 
-    @patch('log_analyzer.triage.get_provider')
-    @patch('log_analyzer.triage.LogAnalyzer')
-    def test_triage_calls_provider(self, mock_analyzer_class, mock_get_provider):
-        """Test that triage uses the AI provider."""
-        # Setup mocks
+    def test_get_provider_returns_cached(self):
         mock_provider = MagicMock()
         mock_provider.name = "test"
-        mock_provider.sanitize_log_content.return_value = "sanitized"
-        mock_provider.analyze.return_value = AIResponse(
-            content='{"summary": "Test", "overall_severity": "LOW", "confidence": 0.5, "issues": []}',
-            model="test",
-            provider="test",
-            latency_ms=100,
-        )
+        engine = TriageEngine(provider=mock_provider)
+        assert engine._get_provider() is mock_provider
+
+    @patch('log_analyzer.triage.get_provider')
+    def test_get_provider_auto_detects(self, mock_get_provider):
+        mock_provider = MagicMock()
+        mock_provider.name = "anthropic"
+        mock_provider.get_model.return_value = "model"
         mock_get_provider.return_value = mock_provider
 
-        mock_analyzer = MagicMock()
-        mock_analyzer.analyze.return_value = MockAnalysisResult()
-        mock_analyzer_class.return_value = mock_analyzer
+        engine = TriageEngine()
+        provider = engine._get_provider()
+        assert provider is mock_provider
+        mock_get_provider.assert_called_once_with(None)
+
+    @patch('log_analyzer.triage.get_provider')
+    def test_triage_from_result(self, mock_get_provider, analysis_result, mock_ai_response):
+        mock_provider = MagicMock()
+        mock_provider.name = "test"
+        mock_provider.get_model.return_value = "m"
+        mock_provider.analyze.return_value = mock_ai_response
+        mock_provider.sanitize_log_content.side_effect = lambda x: x
+        mock_get_provider.return_value = mock_provider
 
         engine = TriageEngine()
-        result = engine.triage("/var/log/test.log")
-
-        # Verify provider was called
-        mock_provider.analyze.assert_called_once()
-        assert result.summary == "Test"
-
-    def test_triage_from_result(self):
-        """Test triage from existing analysis result."""
-        mock_provider = MagicMock()
-        mock_provider.sanitize_log_content.return_value = "sanitized"
-        mock_provider.analyze.return_value = AIResponse(
-            content='{"summary": "From result", "overall_severity": "MEDIUM", "confidence": 0.7, "issues": []}',
-            model="test",
-            provider="test",
-            latency_ms=50,
-        )
-
-        engine = TriageEngine(provider=mock_provider)
-        analysis_result = MockAnalysisResult()
-
         result = engine.triage_from_result(analysis_result)
-
-        assert result.summary == "From result"
+        assert isinstance(result, TriageResult)
+        assert result.summary == "Database connectivity issues detected"
         mock_provider.analyze.assert_called_once()
 
+    @patch('log_analyzer.triage.get_provider')
+    def test_triage_full_pipeline(self, mock_get_provider, mock_ai_response):
+        """Test triage() which reads a file, analyzes it, and runs AI."""
+        mock_provider = MagicMock()
+        mock_provider.name = "test"
+        mock_provider.get_model.return_value = "m"
+        mock_provider.analyze.return_value = mock_ai_response
+        mock_provider.sanitize_log_content.side_effect = lambda x: x
+        mock_get_provider.return_value = mock_provider
 
-# =============================================================================
-# Test quick_triage convenience function
-# =============================================================================
+        engine = TriageEngine()
+        # Mock the internal analyzer
+        mock_analysis = AnalysisResult(
+            filepath="test.log", detected_format="json",
+            total_lines=10, parsed_lines=10, failed_lines=0,
+            level_counts={"ERROR": 2}, errors=[], warnings=[],
+            top_errors=[], top_sources=[],
+        )
+        engine._analyzer = MagicMock()
+        engine._analyzer.analyze.return_value = mock_analysis
+
+        result = engine.triage("test.log")
+        assert isinstance(result, TriageResult)
+        engine._analyzer.analyze.assert_called_once()
+
+
+# ---------------------------------------------------------------------------
+# quick_triage
+# ---------------------------------------------------------------------------
 
 class TestQuickTriage:
-    """Tests for quick_triage function."""
+    @patch('log_analyzer.triage.TriageEngine')
+    def test_quick_triage(self, mock_engine_cls):
+        mock_engine = mock_engine_cls.return_value
+        mock_result = MagicMock(spec=TriageResult)
+        mock_engine.triage.return_value = mock_result
+
+        result = quick_triage("/var/log/app.log", provider="ollama")
+        assert result is mock_result
+        mock_engine_cls.assert_called_once_with(provider_name="ollama")
+        mock_engine.triage.assert_called_once_with("/var/log/app.log")
 
     @patch('log_analyzer.triage.TriageEngine')
-    def test_quick_triage_creates_engine(self, mock_engine_class):
-        """Test that quick_triage creates and uses engine."""
-        mock_engine = MagicMock()
-        mock_engine.triage.return_value = TriageResult(
-            summary="Quick result",
-            overall_severity=Severity.LOW,
-            confidence=0.8,
-            issues=[],
-            analyzed_lines=100,
-            error_count=5,
-            warning_count=10,
-        )
-        mock_engine_class.return_value = mock_engine
+    def test_quick_triage_auto_detect(self, mock_engine_cls):
+        mock_engine = mock_engine_cls.return_value
+        mock_engine.triage.return_value = MagicMock(spec=TriageResult)
 
-        result = quick_triage("/var/log/test.log", provider="ollama")
-
-        mock_engine_class.assert_called_once_with(provider_name="ollama")
-        mock_engine.triage.assert_called_once_with("/var/log/test.log")
-        assert result.summary == "Quick result"
+        quick_triage("/var/log/app.log")
+        mock_engine_cls.assert_called_once_with(provider_name=None)

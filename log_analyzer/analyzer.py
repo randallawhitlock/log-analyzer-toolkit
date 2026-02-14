@@ -14,7 +14,7 @@ from concurrent.futures import ThreadPoolExecutor, as_completed
 from dataclasses import dataclass, field
 from datetime import datetime, timedelta
 from threading import Lock
-from typing import Any
+from typing import Any, Optional
 
 from .constants import COUNTER_PRUNE_TO, DEFAULT_MAX_ERRORS, DEFAULT_SAMPLE_SIZE, MAX_COUNTER_SIZE
 from .parsers import (
@@ -117,8 +117,8 @@ class AnalysisResult:
     level_counts: dict = field(default_factory=dict)
 
     # Time range
-    earliest_timestamp: datetime | None = None
-    latest_timestamp: datetime | None = None
+    earliest_timestamp: Optional[datetime] = None
+    latest_timestamp: Optional[datetime] = None
 
     # Error details
     errors: list = field(default_factory=list)
@@ -132,7 +132,7 @@ class AnalysisResult:
     status_codes: dict = field(default_factory=dict)
 
     # Advanced analytics (optional, Phase 3B)
-    analytics: Any | None = None  # AnalyticsData when computed
+    analytics: Optional[Any] = None  # AnalyticsData when computed
 
     @property
     def error_rate(self) -> float:
@@ -150,7 +150,7 @@ class AnalysisResult:
         return (self.parsed_lines / self.total_lines) * 100
 
     @property
-    def time_span(self) -> timedelta | None:
+    def time_span(self) -> Optional[timedelta]:
         """Calculate time span of logs."""
         if self.earliest_timestamp and self.latest_timestamp:
             return self.latest_timestamp - self.earliest_timestamp
@@ -164,7 +164,7 @@ class LogAnalyzer:
     Handles format detection, parsing, and comprehensive analysis.
     """
 
-    def __init__(self, parsers: list[BaseParser] = None, max_workers: int | None = None):
+    def __init__(self, parsers: list[BaseParser] = None, max_workers: Optional[int] = None):
         """
         Initialize the analyzer.
 
@@ -206,10 +206,10 @@ class LogAnalyzer:
             logger.debug(f"Pruned Counter from {max_size}+ items to {len(counter)} items")
 
     def _analyze_multithreaded(self, filepath: str, parser: BaseParser,
-                                max_errors: int, progress_callback: Any | None,
+                                max_errors: int, progress_callback: Optional[Any],
                                 chunk_size: int, start_time: float,
                                 enable_analytics: bool = False,
-                                analytics_config: dict | None = None) -> AnalysisResult:
+                                analytics_config: Optional[dict] = None) -> AnalysisResult:
         """
         Analyze log file using multithreaded processing.
 
@@ -299,7 +299,7 @@ class LogAnalyzer:
                              total_lines: int, chunk_results: list[dict],
                              max_errors: int, start_time: float,
                              enable_analytics: bool = False,
-                             analytics_config: dict | None = None) -> AnalysisResult:
+                             analytics_config: Optional[dict] = None) -> AnalysisResult:
         """
         Merge results from multiple chunk processing tasks.
 
@@ -475,7 +475,7 @@ class LogAnalyzer:
             'latest': latest,
         }
 
-    def detect_format(self, filepath: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> BaseParser | None:
+    def detect_format(self, filepath: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> Optional[BaseParser]:
         """
         Auto-detect the log format by sampling lines.
 
@@ -523,13 +523,13 @@ class LogAnalyzer:
 
     def analyze(self, filepath: str, parser: BaseParser = None,
                 max_errors: int = DEFAULT_MAX_ERRORS,
-                progress_callback: Any | None = None,
+                progress_callback: Optional[Any] = None,
                 use_fallback: bool = True,
                 detect_inline: bool = True,
                 use_threading: bool = True,
                 chunk_size: int = 10000,
                 enable_analytics: bool = False,
-                analytics_config: dict | None = None) -> AnalysisResult:
+                analytics_config: Optional[dict] = None) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
 

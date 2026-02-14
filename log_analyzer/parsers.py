@@ -11,7 +11,7 @@ import re
 from abc import ABC, abstractmethod
 from dataclasses import dataclass
 from datetime import datetime, timezone
-from typing import Any
+from typing import Any, Optional
 
 __all__ = [
     "LogEntry",
@@ -57,10 +57,10 @@ class LogEntry:
         metadata: Additional parsed fields
     """
     raw: str = ""
-    timestamp: datetime | None = None
-    level: str | None = None
+    timestamp: Optional[datetime] = None
+    level: Optional[str] = None
     message: str = ""
-    source: str | None = None
+    source: Optional[str] = None
     metadata: dict = None
 
     def __post_init__(self):
@@ -91,7 +91,7 @@ AZURE_SEVERITY_MAP = {
 }
 
 
-def parse_cloud_timestamp(timestamp_str: str) -> datetime | None:
+def parse_cloud_timestamp(timestamp_str: str) -> Optional[datetime]:
     """
     Parse cloud provider timestamps (ISO8601, RFC3339, Unix ms).
 
@@ -151,7 +151,7 @@ def parse_cloud_timestamp(timestamp_str: str) -> datetime | None:
     return None
 
 
-def extract_level_from_message(message: str) -> str | None:
+def extract_level_from_message(message: str) -> Optional[str]:
     """
     Extract log level from message content using common patterns.
 
@@ -193,7 +193,7 @@ class BaseParser(ABC):
     name: str = "base"
 
     @abstractmethod
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """
         Parse a single log line.
 
@@ -264,7 +264,7 @@ class AWSCloudWatchParser(BaseParser):
         # Try plain text format
         return bool(self.PATTERN.match(line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse AWS CloudWatch log line."""
         line = line.strip()
 
@@ -304,7 +304,7 @@ class AWSCloudWatchParser(BaseParser):
 
         return None
 
-    def _parse_event(self, event: dict, log_group=None, log_stream=None) -> LogEntry | None:
+    def _parse_event(self, event: dict, log_group=None, log_stream=None) -> Optional[LogEntry]:
         """Parse CloudWatch event object."""
         message = event.get('message', '')
         timestamp_ms = event.get('timestamp')
@@ -368,7 +368,7 @@ class GCPCloudLoggingParser(BaseParser):
         except (json.JSONDecodeError, ValueError):
             return False
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse GCP Cloud Logging log line."""
         try:
             data = json.loads(line.strip())
@@ -498,7 +498,7 @@ class AzureMonitorParser(BaseParser):
         has_level = any(field in data for field in self.LEVEL_FIELDS)
         return has_time and has_level
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse Azure Monitor log line."""
         line = line.strip()
 
@@ -521,7 +521,7 @@ class AzureMonitorParser(BaseParser):
 
         return None
 
-    def _parse_entry(self, data: dict) -> LogEntry | None:
+    def _parse_entry(self, data: dict) -> Optional[LogEntry]:
         """Parse single Azure Monitor entry."""
         if not isinstance(data, dict):
             return None
@@ -616,7 +616,7 @@ class DockerJSONParser(BaseParser):
         except (json.JSONDecodeError, ValueError):
             return False
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse Docker JSON log line."""
         try:
             data = json.loads(line.strip())
@@ -695,7 +695,7 @@ class KubernetesParser(BaseParser):
 
         return False
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse Kubernetes log line."""
         line = line.strip()
 
@@ -810,7 +810,7 @@ class ContainerdParser(BaseParser):
 
         return False
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse containerd CRI log line."""
         line = line.strip()
 
@@ -901,7 +901,7 @@ class ApacheAccessParser(BaseParser):
         """Check if line matches Apache access log format."""
         return bool(self.PATTERN.match(line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an Apache access log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -982,7 +982,7 @@ class ApacheErrorParser(BaseParser):
         """Check if line matches Apache error log format."""
         return bool(self.PATTERN.match(line) or self.PATTERN_LEGACY.match(line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an Apache error log line."""
         # Try modern format first
         match = self.PATTERN.match(line)
@@ -1046,7 +1046,7 @@ class NginxAccessParser(BaseParser):
         """Check if line matches nginx access log format."""
         return bool(self.PATTERN.match(line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an nginx access log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1118,7 +1118,7 @@ class JSONLogParser(BaseParser):
         line = line.strip()
         return line.startswith('{') and line.endswith('}')
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a JSON log line."""
         import json
 
@@ -1171,7 +1171,7 @@ class JSONLogParser(BaseParser):
             metadata=data
         )
 
-    def _parse_timestamp(self, value: Any) -> datetime | None:
+    def _parse_timestamp(self, value: Any) -> Optional[datetime]:
         """Attempt to parse various timestamp formats."""
         if isinstance(value, (int, float)):
             # Unix timestamp
@@ -1197,7 +1197,7 @@ class JSONLogParser(BaseParser):
 
         return None
 
-    def _normalize_level(self, level: str | None) -> str:
+    def _normalize_level(self, level: Optional[str]) -> str:
         """Normalize log level to standard values."""
         if not level:
             return 'INFO'
@@ -1274,7 +1274,7 @@ class SyslogParser(BaseParser):
         # Check for BSD format (starts with month abbreviation)
         return bool(len(line) > 15 and line[:3] in ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a syslog line."""
         # Try RFC 5424 first (has version number)
         match = self.PATTERN_5424.match(line)
@@ -1402,7 +1402,7 @@ class AndroidParser(BaseParser):
         """Check if line matches Android logcat format."""
         return bool(re.match(r'^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an Android logcat line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1462,7 +1462,7 @@ class JavaLogParser(BaseParser):
         # Check for short timestamp (Spark)
         return bool(re.match(r'^\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Java log line."""
         # Try full format first
         match = self.PATTERN_FULL.match(line)
@@ -1519,7 +1519,7 @@ class HDFSParser(BaseParser):
         """Check if line matches HDFS format."""
         return bool(re.match(r'^\d{6}\s+\d{6}\s+\d+\s+(?:INFO|WARN|ERROR|DEBUG)', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an HDFS log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1578,7 +1578,7 @@ class SupercomputerParser(BaseParser):
         """Check if line matches supercomputer format."""
         return line.startswith('- ') and re.match(r'^-\s+\d+\s+\d{4}\.\d{2}\.\d{2}', line)
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a supercomputer log line."""
         # Try BGL format first
         match = self.PATTERN_BGL.match(line)
@@ -1643,7 +1643,7 @@ class WindowsEventParser(BaseParser):
         """Check if line matches Windows event format."""
         return bool(re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2},\s*\w+', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Windows event log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1690,7 +1690,7 @@ class ProxifierParser(BaseParser):
         """Check if line matches Proxifier format."""
         return line.startswith('[') and bool(re.match(r'^\[\d+\.\d+\s+\d{2}:\d{2}:\d{2}\]', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Proxifier log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1741,7 +1741,7 @@ class HPCParser(BaseParser):
         # Matches: ID node/gige category.subcategory timestamp flag message
         return bool(re.match(r'^\d+\s+(?:node-\d+|gige\d+)\s+\w+(?:\.\w+)?', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an HPC log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1791,7 +1791,7 @@ class HealthAppParser(BaseParser):
         """Check if line matches HealthApp format."""
         return bool(re.match(r'^\d{8}-\d{1,2}:\d{1,2}:\d{1,2}:\d{1,3}\|', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a HealthApp log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1844,7 +1844,7 @@ class OpenStackParser(BaseParser):
         # Look for the characteristic [req-uuid] pattern
         return bool(re.match(r'^\S+\s+\d{4}-\d{2}-\d{2}.*\[req-', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an OpenStack log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1903,7 +1903,7 @@ class SquidParser(BaseParser):
         # Squid lines start with epoch timestamp (10 digits, optional decimal) followed by duration
         return bool(re.match(r'^\d{10}(?:\.\d+)?\s+-?\d+\s+\S+\s+\w+[_/]', line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Squid log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -1970,7 +1970,7 @@ class NginxParser(BaseParser):
         """Check if line matches nginx format."""
         return bool(self.PATTERN.match(line))
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a nginx log line."""
         match = self.PATTERN.match(line)
         if not match:
@@ -2069,7 +2069,7 @@ class UniversalFallbackParser(BaseParser):
         """
         return True
 
-    def parse(self, line: str) -> LogEntry | None:
+    def parse(self, line: str) -> Optional[LogEntry]:
         """
         Parse a log line using heuristic pattern detection.
 

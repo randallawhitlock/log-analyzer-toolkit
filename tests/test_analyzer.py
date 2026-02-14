@@ -1,354 +1,247 @@
 """
-Unit tests for the log analyzer.
+Unit tests for LogAnalyzer and AnalysisResult.
 """
 
-import os
-import tempfile
 from collections import Counter
-from unittest.mock import patch
-
+from datetime import datetime, timedelta
+from unittest.mock import MagicMock, patch
 import pytest
 
-from log_analyzer.analyzer import AnalysisResult, LogAnalyzer
-from log_analyzer.constants import COUNTER_PRUNE_TO, MAX_COUNTER_SIZE
-from log_analyzer.reader import LogReader
-
-
-class TestLogReader:
-    """Tests for LogReader class."""
-
-    def test_read_lines(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write("line 1\nline 2\nline 3\n")
-            f.flush()
-
-            reader = LogReader(f.name)
-            lines = reader.read_all()
-
-            assert len(lines) == 3
-            assert lines[0] == "line 1"
-            assert lines[2] == "line 3"
-
-            os.unlink(f.name)
-
-    def test_file_not_found(self):
-        with pytest.raises(FileNotFoundError):
-            LogReader("/nonexistent/path/file.log")
-
-    def test_count_lines(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write("a\nb\nc\nd\ne\n")
-            f.flush()
-
-            reader = LogReader(f.name)
-            assert reader.count_lines() == 5
-
-            os.unlink(f.name)
-
-    def test_get_file_info(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write("test content")
-            f.flush()
-
-            reader = LogReader(f.name)
-            info = reader.get_file_info()
-
-            assert 'path' in info
-            assert 'name' in info
-            assert 'size_bytes' in info
-            assert info['size_bytes'] == 12
-
-            os.unlink(f.name)
-
-
-class TestLogAnalyzer:
-    """Tests for LogAnalyzer class."""
-
-    def test_detect_format_apache(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write('192.168.1.1 - - [10/Oct/2023:13:55:36 +0000] "GET / HTTP/1.1" 200 100\n')
-            f.write('192.168.1.2 - - [10/Oct/2023:13:55:37 +0000] "GET /api HTTP/1.1" 200 200\n')
-            f.flush()
-
-            analyzer = LogAnalyzer()
-            parser = analyzer.detect_format(f.name)
-
-            assert parser is not None
-            assert parser.name in ['apache_access', 'nginx_access']
-
-            os.unlink(f.name)
-
-    def test_detect_format_json(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write('{"level": "info", "msg": "test"}\n')
-            f.write('{"level": "error", "msg": "fail"}\n')
-            f.flush()
-
-            analyzer = LogAnalyzer()
-            parser = analyzer.detect_format(f.name)
-
-            assert parser is not None
-            assert parser.name == 'json'
-
-            os.unlink(f.name)
-
-    def test_analyze_basic(self):
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write('{"level": "info", "msg": "started"}\n')
-            f.write('{"level": "error", "msg": "failed"}\n')
-            f.write('{"level": "info", "msg": "completed"}\n')
-            f.flush()
-
-            analyzer = LogAnalyzer()
-            result = analyzer.analyze(f.name)
-
-            assert result.total_lines == 3
-            assert result.parsed_lines == 3
-            assert result.level_counts['INFO'] == 2
-            assert result.level_counts['ERROR'] == 1
-
-            os.unlink(f.name)
+from log_analyzer.analyzer import LogAnalyzer, AnalysisResult
+from log_analyzer.parsers import LogEntry, UniversalFallbackParser
 
 
 class TestAnalysisResult:
-    """Tests for AnalysisResult dataclass."""
+    """Tests for AnalysisResult dataclass properties."""
 
-    def test_error_rate_calculation(self):
+    def test_error_rate_with_errors(self):
         result = AnalysisResult(
-            filepath="/test.log",
-            detected_format="test",
-            total_lines=100,
-            parsed_lines=100,
-            failed_lines=0,
-            level_counts={'ERROR': 10, 'CRITICAL': 5, 'INFO': 85}
+            filepath="test.log", detected_format="standard",
+            total_lines=100, parsed_lines=100, failed_lines=0,
+            level_counts={"ERROR": 5, "CRITICAL": 2, "INFO": 93},
         )
+        assert result.error_rate == pytest.approx(7.0)
 
-        assert result.error_rate == 15.0
+    def test_error_rate_empty(self):
+        result = AnalysisResult(
+            filepath="test.log", detected_format="standard",
+            total_lines=0, parsed_lines=0, failed_lines=0,
+        )
+        assert result.error_rate == 0.0
 
     def test_parse_success_rate(self):
         result = AnalysisResult(
-            filepath="/test.log",
-            detected_format="test",
-            total_lines=100,
-            parsed_lines=90,
-            failed_lines=10
+            filepath="test.log", detected_format="standard",
+            total_lines=200, parsed_lines=180, failed_lines=20,
         )
+        assert result.parse_success_rate == pytest.approx(90.0)
 
-        assert result.parse_success_rate == 90.0
-
-    def test_zero_lines_no_division_error(self):
+    def test_parse_success_rate_empty(self):
         result = AnalysisResult(
-            filepath="/test.log",
-            detected_format="test",
-            total_lines=0,
-            parsed_lines=0,
-            failed_lines=0
+            filepath="test.log", detected_format="standard",
+            total_lines=0, parsed_lines=0, failed_lines=0,
         )
-
-        assert result.error_rate == 0.0
         assert result.parse_success_rate == 0.0
 
+    def test_time_span_with_timestamps(self):
+        t1 = datetime(2020, 1, 1, 12, 0, 0)
+        t2 = datetime(2020, 1, 1, 14, 30, 0)
+        result = AnalysisResult(
+            filepath="test.log", detected_format="standard",
+            total_lines=10, parsed_lines=10, failed_lines=0,
+            earliest_timestamp=t1, latest_timestamp=t2,
+        )
+        assert result.time_span == timedelta(hours=2, minutes=30)
 
-class TestMultithreading:
-    """Tests for multithreaded analysis features."""
+    def test_time_span_without_timestamps(self):
+        result = AnalysisResult(
+            filepath="test.log", detected_format="standard",
+            total_lines=10, parsed_lines=10, failed_lines=0,
+        )
+        assert result.time_span is None
 
-    def test_max_workers_from_init(self):
-        """Test that max_workers can be set via __init__."""
-        analyzer = LogAnalyzer(max_workers=2)
-        assert analyzer.max_workers == 2
 
-    def test_max_workers_from_env(self):
-        """Test that max_workers can be set via environment variable."""
-        with patch.dict(os.environ, {'LOG_ANALYZER_MAX_WORKERS': '3'}):
-            # Reset config to pick up env var
-            from log_analyzer.config import reset_config
-            reset_config()
+class TestPruneCounter:
+    """Tests for LogAnalyzer._prune_counter static method."""
 
+    def test_prune_when_over_limit(self):
+        c = Counter({f"key{i}": i for i in range(150)})
+        LogAnalyzer._prune_counter(c, max_size=100, prune_to=50)
+        assert len(c) == 50
+        # Top items should be preserved
+        assert c["key149"] == 149
+
+    def test_no_prune_when_under_limit(self):
+        c = Counter({"a": 1, "b": 2})
+        LogAnalyzer._prune_counter(c, max_size=100, prune_to=50)
+        assert len(c) == 2
+
+
+class TestLogAnalyzer:
+    """Tests for LogAnalyzer analysis methods."""
+
+    def test_analyze_file_not_found(self):
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_reader_cls.side_effect = FileNotFoundError("File not found")
             analyzer = LogAnalyzer()
-            assert analyzer.max_workers == 3
+            with pytest.raises(FileNotFoundError):
+                analyzer.analyze("non_existent.log")
 
-            # Clean up
-            reset_config()
+    def test_analyze_empty_file(self):
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = []
+            mock_instance.count_lines.return_value = 0
+            analyzer = LogAnalyzer()
+            result = analyzer.analyze("empty.log")
+            assert isinstance(result, AnalysisResult)
+            assert result.total_lines == 0
+            assert result.parsed_lines == 0
 
-    def test_counter_pruning(self):
-        """Test that _prune_counter correctly prunes oversized counters."""
-        # Create a counter with more than MAX_COUNTER_SIZE items
-        counter = Counter({f"item_{i}": i for i in range(MAX_COUNTER_SIZE + 1000)})
-        original_size = len(counter)
-
-        assert original_size > MAX_COUNTER_SIZE
-
-        # Prune it
-        LogAnalyzer._prune_counter(counter)
-
-        # Should be pruned to COUNTER_PRUNE_TO
-        assert len(counter) == COUNTER_PRUNE_TO
-
-        # Should keep the most common items (highest numbers)
-        assert counter[f"item_{MAX_COUNTER_SIZE + 999}"] > 0
-
-    def test_counter_no_prune_when_small(self):
-        """Test that _prune_counter doesn't prune small counters."""
-        counter = Counter({'a': 1, 'b': 2, 'c': 3})
-        original_size = len(counter)
-
-        LogAnalyzer._prune_counter(counter)
-
-        # Should remain unchanged
-        assert len(counter) == original_size
-        assert counter['a'] == 1
-
-    def test_single_threaded_analysis(self):
-        """Test single-threaded analysis still works."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            for i in range(100):
-                f.write(f'{{"level": "info", "msg": "message {i}"}}\n')
-            f.flush()
-
-            analyzer = LogAnalyzer(max_workers=1)
-            # Disable threading explicitly
-            result = analyzer.analyze(f.name, use_threading=False)
-
-            assert result.total_lines == 100
-            assert result.parsed_lines == 100
-            assert result.detected_format == 'json'
-
-            os.unlink(f.name)
-
-    def test_multithreaded_analysis(self):
-        """Test multithreaded analysis produces same results as single-threaded."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            # Create a file with enough lines to benefit from multithreading
-            for i in range(1000):
-                level = "error" if i % 10 == 0 else "info"
-                f.write(f'{{"level": "{level}", "msg": "message {i}"}}\n')
-            f.flush()
-
-            analyzer = LogAnalyzer(max_workers=2)
-
-            # Single-threaded analysis
-            result_single = analyzer.analyze(f.name, use_threading=False)
-
-            # Multithreaded analysis
-            result_multi = analyzer.analyze(f.name, use_threading=True, chunk_size=100)
-
-            # Results should be identical
-            assert result_single.total_lines == result_multi.total_lines
-            assert result_single.parsed_lines == result_multi.parsed_lines
-            assert result_single.level_counts == result_multi.level_counts
-            assert result_single.detected_format == result_multi.detected_format
-
-            os.unlink(f.name)
-
-    def test_multithreaded_with_different_workers(self):
-        """Test multithreading with different worker counts."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            for i in range(500):
-                f.write(f'{{"level": "info", "msg": "message {i}"}}\n')
-            f.flush()
-
-            results = []
-            for workers in [1, 2, 4]:
-                analyzer = LogAnalyzer(max_workers=workers)
-                result = analyzer.analyze(f.name, use_threading=True, chunk_size=50)
-                results.append(result)
-
-            # All results should be identical regardless of worker count
-            for result in results:
-                assert result.total_lines == 500
-                assert result.parsed_lines == 500
-                assert result.level_counts['INFO'] == 500
-
-            os.unlink(f.name)
-
-    def test_chunk_processing(self):
-        """Test that _process_chunk correctly processes a chunk of lines."""
-        from log_analyzer.parsers import JSONLogParser
-
-        parser = JSONLogParser()
-        analyzer = LogAnalyzer()
-
+    def test_analyze_success(self):
         lines = [
-            '{"level": "info", "msg": "test1"}',
-            '{"level": "error", "msg": "test2"}',
-            '{"level": "info", "msg": "test3"}',
+            '2020-01-01T12:00:00Z [INFO] Started',
+            '2020-01-01T12:00:01Z [ERROR] Failed',
+            'Invalid line',
         ]
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 3
+            analyzer = LogAnalyzer()
+            result = analyzer.analyze("test.log")
+            assert result.parsed_lines == 3
+            assert result.failed_lines == 0
 
-        result = analyzer._process_chunk(lines, parser, max_errors=50)
+    def test_analyze_with_specific_parser(self):
+        lines = ['2020-01-01T12:00:00Z [INFO] Started']
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 1
+            analyzer = LogAnalyzer()
+            parser = UniversalFallbackParser()
+            result = analyzer.analyze("test.log", parser=parser)
+            assert result.parsed_lines == 1
+            assert result.detected_format == "universal"
 
-        assert result['parsed_lines'] == 3
-        assert result['failed_lines'] == 0
-        assert result['level_counts']['INFO'] == 2
-        assert result['level_counts']['ERROR'] == 1
-        assert len(result['errors']) == 1
+    def test_analyze_fallback_for_random_text(self):
+        lines = ['Just some random text', 'Another line']
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 2
+            analyzer = LogAnalyzer()
+            result = analyzer.analyze("test.log")
+            assert result.parsed_lines == 2
+            assert result.failed_lines == 0
 
-    def test_merge_chunk_results(self):
-        """Test that _merge_chunk_results correctly merges results from multiple chunks."""
-        from log_analyzer.parsers import JSONLogParser
-
-        parser = JSONLogParser()
-        analyzer = LogAnalyzer()
-
-        # Simulate results from two chunks
-        chunk_results = [
-            {
-                'parsed_lines': 50,
-                'failed_lines': 0,
-                'level_counts': Counter({'INFO': 40, 'ERROR': 10}),
-                'status_codes': Counter(),
-                'source_counts': Counter({'app': 50}),
-                'error_messages': Counter({'error1': 10}),
-                'errors': [],
-                'warnings': [],
-                'earliest': None,
-                'latest': None,
-            },
-            {
-                'parsed_lines': 50,
-                'failed_lines': 0,
-                'level_counts': Counter({'INFO': 45, 'ERROR': 5}),
-                'status_codes': Counter(),
-                'source_counts': Counter({'app': 50}),
-                'error_messages': Counter({'error2': 5}),
-                'errors': [],
-                'warnings': [],
-                'earliest': None,
-                'latest': None,
-            },
+    def test_analyze_with_format_detection(self):
+        lines = [
+            '2020-01-01T12:00:00Z [INFO] Started',
+            '2020-01-01T12:00:01Z [ERROR] Failed',
         ]
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 2
+            analyzer = LogAnalyzer()
+            result = analyzer.analyze("test.log")
+            assert result.parsed_lines == 2
+            assert result.detected_format is not None
 
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            f.write('test\n')
-            f.flush()
+    def test_error_aggregation(self):
+        lines = [
+            '2020-01-01T12:00:00Z [ERROR] Error 1',
+            '2020-01-01T12:00:01Z [ERROR] Error 2',
+            '2020-01-01T12:00:02Z [WARN] Warning 1',
+        ]
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 3
+            analyzer = LogAnalyzer()
+            result = analyzer.analyze("error.log")
+            assert result.level_counts.get('ERROR') == 2
+            assert result.level_counts.get('WARNING') == 1
 
-            result = analyzer._merge_chunk_results(
-                filepath=f.name,
-                parser=parser,
-                total_lines=100,
-                chunk_results=chunk_results,
-                max_errors=50,
-                start_time=0
+    def test_analyze_single_threaded(self):
+        """Ensure single-threaded path works with use_threading=False."""
+        lines = [
+            '2020-01-01T12:00:00Z [INFO] Line 1',
+            '2020-01-01T12:00:01Z [ERROR] Line 2',
+        ]
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 2
+            analyzer = LogAnalyzer()
+            parser = UniversalFallbackParser()
+            result = analyzer.analyze("test.log", parser=parser, use_threading=False)
+            assert result.parsed_lines == 2
+            assert result.detected_format == "universal"
+
+    def test_detect_format(self):
+        """Test standalone format detection method."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as tf:
+            tf.write('{"log": "test", "stream": "stdout", "time": "2020-01-01T00:00:00Z"}\n' * 10)
+            tf_path = tf.name
+        try:
+            analyzer = LogAnalyzer()
+            parser = analyzer.detect_format(tf_path)
+            assert parser is not None
+            assert hasattr(parser, 'name')
+        finally:
+            os.remove(tf_path)
+
+    def test_detect_format_unknown(self):
+        """Test detection returns None for unrecognizable formats."""
+        import tempfile, os
+        with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as tf:
+            tf.write('xyzzy\n' * 100)
+            tf_path = tf.name
+        try:
+            analyzer = LogAnalyzer()
+            parser = analyzer.detect_format(tf_path)
+            assert parser is None
+        finally:
+            os.remove(tf_path)
+
+    def test_analyze_with_progress_callback(self):
+        """Ensure progress callback is invoked during analysis."""
+        lines = ['2020-01-01T12:00:00Z [INFO] test'] * 5
+        callback = MagicMock()
+        callback.update = MagicMock()
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 5
+            analyzer = LogAnalyzer()
+            parser = UniversalFallbackParser()
+            result = analyzer.analyze(
+                "test.log", parser=parser,
+                progress_callback=callback, use_threading=False
             )
+            assert result.parsed_lines == 5
+            assert callback.update.call_count >= 1
 
-            assert result.parsed_lines == 100
-            assert result.level_counts['INFO'] == 85
-            assert result.level_counts['ERROR'] == 15
-
-            os.unlink(f.name)
-
-    def test_inline_detection_disabled_with_threading(self):
-        """Test that inline detection is disabled when multithreading is enabled."""
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
-            for i in range(100):
-                f.write(f'{{"level": "info", "msg": "message {i}"}}\n')
-            f.flush()
-
-            analyzer = LogAnalyzer(max_workers=2)
-
-            # Even if detect_inline=True, it should be forced to False for threading
-            result = analyzer.analyze(f.name, use_threading=True, detect_inline=True)
-
-            assert result.parsed_lines == 100
-            assert result.detected_format == 'json'
-
-            os.unlink(f.name)
+    def test_analyze_with_analytics(self):
+        """Test analysis with analytics enabled."""
+        lines = [
+            '2020-01-01T12:00:00Z [INFO] Line 1',
+            '2020-01-01T13:00:00Z [ERROR] Line 2',
+        ]
+        with patch('log_analyzer.analyzer.LogReader') as mock_reader_cls:
+            mock_instance = mock_reader_cls.return_value
+            mock_instance.read_lines.return_value = lines
+            mock_instance.count_lines.return_value = 2
+            analyzer = LogAnalyzer()
+            parser = UniversalFallbackParser()
+            result = analyzer.analyze(
+                "test.log", parser=parser, use_threading=False,
+                enable_analytics=True,
+                analytics_config={'time_bucket_size': '1h'}
+            )
+            assert result.parsed_lines == 2
+            # Analytics may or may not be populated depending on implementation

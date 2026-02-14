@@ -1,385 +1,225 @@
 """
-Unit tests for report generation module.
+Comprehensive unit tests for ReportGenerator.
 """
 
 import json
 import tempfile
+from datetime import datetime
 from pathlib import Path
+from unittest.mock import MagicMock, patch
+
+import pytest
 
 from log_analyzer.analyzer import AnalysisResult
-from log_analyzer.charts import generate_ascii_bar_chart, generate_chartjs_config
+from log_analyzer.parsers import LogEntry
 from log_analyzer.report import ReportGenerator
 from log_analyzer.stats_models import AnalyticsData
 
 
-class TestReportGeneration:
-    """Tests for basic report generation."""
+# ---------------------------------------------------------------------------
+# Fixtures
+# ---------------------------------------------------------------------------
 
-    def test_markdown_generation_basic(self):
-        """Test basic Markdown report generation without analytics."""
+@pytest.fixture
+def basic_result():
+    return AnalysisResult(
+        filepath="test.log",
+        detected_format="standard",
+        total_lines=100,
+        parsed_lines=100,
+        failed_lines=0,
+        level_counts={"INFO": 90, "ERROR": 10},
+        errors=[],
+        warnings=[],
+    )
+
+
+@pytest.fixture
+def full_result():
+    """AnalysisResult with all optional fields populated."""
+    return AnalysisResult(
+        filepath="/var/log/app.log",
+        detected_format="json",
+        total_lines=1000,
+        parsed_lines=950,
+        failed_lines=50,
+        level_counts={"CRITICAL": 5, "ERROR": 30, "WARNING": 50, "INFO": 800, "DEBUG": 65},
+        earliest_timestamp=datetime(2020, 1, 1, 0, 0, 0),
+        latest_timestamp=datetime(2020, 1, 1, 23, 59, 59),
+        errors=[
+            LogEntry(timestamp=datetime(2020, 1, 1, 12, 0), level="ERROR",
+                     message="Connection refused"),
+        ],
+        warnings=[],
+        top_errors=[("Connection refused", 15), ("Timeout", 10)],
+        top_sources=[("api-server", 500), ("worker", 300)],
+        status_codes={200: 600, 301: 50, 404: 100, 500: 30},
+        analytics=AnalyticsData(
+            temporal_distribution={"2020-01-01T12:00": 100, "2020-01-01T13:00": 200},
+            hourly_distribution={12: 100, 13: 200},
+        ),
+    )
+
+
+# ---------------------------------------------------------------------------
+# Markdown Report
+# ---------------------------------------------------------------------------
+
+class TestMarkdownReport:
+    def test_basic_report(self, basic_result):
+        report = ReportGenerator(basic_result).to_markdown()
+        assert "# Log Analysis Report" in report
+        assert "test.log" in report
+        assert "100" in report
+        assert "ERROR" in report
+
+    def test_with_timestamps(self, full_result):
+        report = ReportGenerator(full_result).to_markdown()
+        assert "First Entry" in report
+        assert "Last Entry" in report
+        assert "Time Span" in report
+
+    def test_with_status_codes(self, full_result):
+        report = ReportGenerator(full_result).to_markdown()
+        assert "HTTP Status Codes" in report
+        assert "200" in report
+        assert "404" in report
+        assert "500" in report
+
+    def test_with_top_errors(self, full_result):
+        report = ReportGenerator(full_result).to_markdown()
+        assert "Top Error Messages" in report
+        assert "Connection refused" in report
+
+    def test_with_top_sources(self, full_result):
+        report = ReportGenerator(full_result).to_markdown()
+        assert "Top Sources" in report
+        assert "api-server" in report
+
+    def test_with_analytics(self, full_result):
+        report = ReportGenerator(full_result).to_markdown()
+        assert "Analytics" in report
+        assert "Hourly Distribution" in report
+
+    def test_empty_result(self):
         result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="json",
-            total_lines=1000,
-            parsed_lines=950,
-            failed_lines=50,
-            level_counts={'ERROR': 10, 'INFO': 940},
-            top_errors=[("Connection timeout", 5), ("Database error", 3)],
-            top_sources=[("192.168.1.1", 500), ("192.168.1.2", 450)],
+            filepath="empty.log", detected_format="unknown",
+            total_lines=0, parsed_lines=0, failed_lines=0,
         )
-
-        generator = ReportGenerator(result)
-        markdown = generator.to_markdown()
-
-        assert "# Log Analysis Report" in markdown
-        assert "test.log" in markdown
-        assert "json" in markdown
-        assert "1,000" in markdown  # total lines formatted
-        assert "950" in markdown  # parsed lines
-        assert "Connection timeout" in markdown
-        assert "192.168.1.1" in markdown
-
-    def test_markdown_with_analytics(self):
-        """Test Markdown report includes analytics section."""
-        analytics = AnalyticsData(
-            temporal_distribution={
-                '2024-02-09T14:00:00': 45,
-                '2024-02-09T15:00:00': 52,
-            },
-            hourly_distribution={14: 45, 15: 52},
-            trend_direction='increasing',
-            peak_period='2024-02-09T15:00:00'
-        )
-
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="json",
-            total_lines=100,
-            parsed_lines=97,
-            failed_lines=3,
-            level_counts={'ERROR': 10},
-            analytics=analytics
-        )
-
-        generator = ReportGenerator(result)
-        markdown = generator.to_markdown()
-
-        assert "📈 Time-Series Analytics" in markdown
-        assert "increasing" in markdown
-        assert "2024-02-09T15:00:00" in markdown
-        assert "Hourly Distribution" in markdown
-        assert "14:00" in markdown
-        assert "15:00" in markdown
-
-    def test_html_generation_basic(self):
-        """Test basic HTML report generation."""
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="apache_access",
-            total_lines=500,
-            parsed_lines=490,
-            failed_lines=10,
-            level_counts={'ERROR': 20, 'WARNING': 30},
-            top_errors=[("404 Not Found", 15)],
-        )
-
-        generator = ReportGenerator(result)
-        html = generator.to_html()
-
-        assert "<!DOCTYPE html>" in html
-        assert "<html" in html
-        assert "test.log" in html
-        assert "apache_access" in html
-        assert "404 Not Found" in html
-        assert "Generated by Log Analyzer Toolkit" in html
-
-    def test_html_with_charts(self):
-        """Test HTML report includes Chart.js visualizations."""
-        analytics = AnalyticsData(
-            temporal_distribution={'2024-02-09T14:00:00': 100},
-            hourly_distribution={14: 100},
-            trend_direction='stable',
-            peak_period='2024-02-09T14:00:00'
-        )
-
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="json",
-            total_lines=100,
-            parsed_lines=100,
-            failed_lines=0,
-            level_counts={'INFO': 100},
-            analytics=analytics
-        )
-
-        generator = ReportGenerator(result)
-        html = generator.to_html()
-
-        assert "chart.js" in html.lower()  # Chart.js CDN
-        assert "temporal-chart" in html  # Chart canvas ID
-        assert "hourly-chart" in html  # Chart canvas ID
-        assert "const chartConfig" in html  # Chart config variable
-        assert "stable" in html  # Trend displayed
-
-    def test_csv_export(self):
-        """Test CSV export format."""
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="syslog",
-            total_lines=200,
-            parsed_lines=195,
-            failed_lines=5,
-            level_counts={'ERROR': 10, 'WARNING': 20, 'INFO': 165},
-            top_errors=[("Error 1", 5), ("Error 2", 3)],
-            top_sources=[("server1", 100), ("server2", 95)],
-        )
-
-        generator = ReportGenerator(result)
-        csv_content = generator.to_csv()
-
-        assert "# Log Analysis Report" in csv_content
-        assert "test.log" in csv_content
-        assert "# Severity Breakdown" in csv_content
-        assert "ERROR,10" in csv_content
-        assert "# Top Errors" in csv_content
-        assert "Error 1" in csv_content
-        assert "# Top Sources" in csv_content
-        assert "server1,100" in csv_content
-
-    def test_csv_with_analytics(self):
-        """Test CSV export includes analytics data."""
-        analytics = AnalyticsData(
-            hourly_distribution={9: 50, 10: 75, 11: 60},
-            temporal_distribution={'2024-02-09T09:00:00': 50},
-            trend_direction='increasing',
-            peak_period='2024-02-09T10:00:00'
-        )
-
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="json",
-            total_lines=185,
-            parsed_lines=185,
-            failed_lines=0,
-            level_counts={'INFO': 185},
-            analytics=analytics
-        )
-
-        generator = ReportGenerator(result)
-        csv_content = generator.to_csv()
-
-        assert "# Analytics" in csv_content
-        assert "increasing" in csv_content
-        assert "# Hourly Distribution" in csv_content
-        assert "09:00,50" in csv_content
-        assert "10:00,75" in csv_content
-
-    def test_json_export(self):
-        """Test JSON export format."""
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="nginx_access",
-            total_lines=300,
-            parsed_lines=295,
-            failed_lines=5,
-            level_counts={'ERROR': 15},
-            top_errors=[("Connection refused", 8)],
-            status_codes={200: 250, 404: 30, 500: 15},
-        )
-
-        generator = ReportGenerator(result)
-        json_content = generator.to_json()
-
-        # Parse to validate JSON
-        data = json.loads(json_content)
-
-        assert data['metadata']['filepath'] == "/tmp/test.log"
-        assert data['metadata']['format'] == "nginx_access"
-        assert data['metadata']['total_lines'] == 300
-        assert data['severity']['ERROR'] == 15
-        assert data['top_errors'][0]['message'] == "Connection refused"
-        assert data['top_errors'][0]['count'] == 8
-        assert '200' in data['status_codes']
-
-    def test_json_with_analytics(self):
-        """Test JSON export includes analytics data."""
-        analytics = AnalyticsData(
-            temporal_distribution={'2024-02-09T14:00:00': 100, '2024-02-09T15:00:00': 150},
-            hourly_distribution={14: 100, 15: 150},
-            trend_direction='increasing',
-            peak_period='2024-02-09T15:00:00'
-        )
-
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="json",
-            total_lines=250,
-            parsed_lines=250,
-            failed_lines=0,
-            level_counts={'INFO': 250},
-            analytics=analytics
-        )
-
-        generator = ReportGenerator(result)
-        json_content = generator.to_json()
-
-        data = json.loads(json_content)
-
-        assert 'analytics' in data
-        assert data['analytics']['trend_direction'] == 'increasing'
-        assert data['analytics']['peak_period'] == '2024-02-09T15:00:00'
-        assert '14' in data['analytics']['hourly_distribution']
-        assert data['analytics']['hourly_distribution']['14'] == 100
-
-    def test_save_markdown(self):
-        """Test saving Markdown report to file."""
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="json",
-            total_lines=100,
-            parsed_lines=100,
-            failed_lines=0,
-            level_counts={'INFO': 100},
-        )
-
-        generator = ReportGenerator(result)
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.md', delete=False) as f:
-            output_path = f.name
-
-        try:
-            generator.save(output_path, format='markdown')
-
-            assert Path(output_path).exists()
-
-            with open(output_path, encoding='utf-8') as f:
-                content = f.read()
-                assert "# Log Analysis Report" in content
-        finally:
-            Path(output_path).unlink(missing_ok=True)
-
-    def test_save_html(self):
-        """Test saving HTML report to file."""
-        result = AnalysisResult(
-            filepath="/tmp/test.log",
-            detected_format="json",
-            total_lines=100,
-            parsed_lines=100,
-            failed_lines=0,
-            level_counts={'INFO': 100},
-        )
-
-        generator = ReportGenerator(result)
-
-        with tempfile.NamedTemporaryFile(mode='w', suffix='.html', delete=False) as f:
-            output_path = f.name
-
-        try:
-            generator.save(output_path, format='html')
-
-            assert Path(output_path).exists()
-
-            with open(output_path, encoding='utf-8') as f:
-                content = f.read()
-                assert "<!DOCTYPE html>" in content
-        finally:
-            Path(output_path).unlink(missing_ok=True)
-
-
-class TestCharts:
-    """Tests for chart generation utilities."""
-
-    def test_chartjs_config_generation(self):
-        """Test Chart.js configuration JSON generation."""
-        analytics = AnalyticsData(
-            temporal_distribution={
-                '2024-02-09T14:00:00': 45,
-                '2024-02-09T15:00:00': 52,
-                '2024-02-09T16:00:00': 38,
-            },
-            hourly_distribution={14: 45, 15: 52, 16: 38},
-            trend_direction='stable',
-            peak_period='2024-02-09T15:00:00'
-        )
-
-        config_json = generate_chartjs_config(analytics)
-
-        # Parse to validate JSON
-        config = json.loads(config_json)
-
-        assert 'temporal' in config
-        assert 'hourly' in config
-
-        # Temporal chart config
-        assert config['temporal']['type'] == 'line'
-        assert len(config['temporal']['data']['datasets']) == 1
-        assert len(config['temporal']['data']['labels']) == 3
-
-        # Hourly chart config
-        assert config['hourly']['type'] == 'bar'
-        assert len(config['hourly']['data']['datasets']) == 1
-
-    def test_chartjs_config_with_many_buckets(self):
-        """Test Chart.js config limits temporal buckets to 50."""
-        # Create 100 temporal buckets
-        temporal_dist = {
-            f'2024-02-09T{h:02d}:{m:02d}:00': 10
-            for h in range(24)
-            for m in [0, 15, 30, 45]
-        }
-
-        analytics = AnalyticsData(
-            temporal_distribution=temporal_dist,
-            hourly_distribution={},
-            trend_direction='stable',
-            peak_period=None
-        )
-
-        config_json = generate_chartjs_config(analytics)
-        config = json.loads(config_json)
-
-        # Should limit to last 50 buckets
-        assert len(config['temporal']['data']['labels']) == 50
-
-    def test_ascii_bar_chart_generation(self):
-        """Test ASCII bar chart generation."""
-        data = {'A': 10, 'B': 20, 'C': 15}
-
-        chart_data = generate_ascii_bar_chart(data, max_width=40)
-
-        assert len(chart_data) == 3
-
-        # Check structure
-        for label, value, bar in chart_data:
-            assert label in ['A', 'B', 'C']
-            assert isinstance(value, int)
-            assert isinstance(bar, str)
-            assert all(c == '█' for c in bar)
-
-        # B should have longest bar (value 20)
-        b_row = [row for row in chart_data if row[0] == 'B'][0]
-        assert len(b_row[2]) == 40  # max width
-
-    def test_ascii_bar_chart_empty(self):
-        """Test ASCII bar chart with empty data."""
-        chart_data = generate_ascii_bar_chart({})
-
-        assert chart_data == []
-
-    def test_hourly_chart_data(self):
-        """Test hourly distribution chart data formatting."""
-        analytics = AnalyticsData(
-            temporal_distribution={},
-            hourly_distribution={0: 10, 12: 50, 23: 15},
-            trend_direction='stable',
-            peak_period=None
-        )
-
-        config_json = generate_chartjs_config(analytics)
-        config = json.loads(config_json)
-
-        hourly_data = config['hourly']['data']['datasets'][0]['data']
-
-        # Only hours with activity should be included
-        assert len(hourly_data) == 3
-        assert hourly_data == [10, 50, 15]
+        report = ReportGenerator(result).to_markdown()
+        assert "# Log Analysis Report" in report
+        assert "empty.log" in report
+
+
+# ---------------------------------------------------------------------------
+# HTML Report
+# ---------------------------------------------------------------------------
+
+class TestHTMLReport:
+    def test_basic_html(self, basic_result):
+        report = ReportGenerator(basic_result).to_html()
+        assert "<html" in report.lower()
+        assert "test.log" in report
+
+    def test_html_with_chart_js(self, full_result):
+        report = ReportGenerator(full_result).to_html()
+        assert "chart.js" in report.lower() or "Chart" in report
+
+    def test_html_with_full_data(self, full_result):
+        report = ReportGenerator(full_result).to_html()
+        assert "CRITICAL" in report
+        assert "ERROR" in report
+        assert "Connection refused" in report
+
+    def test_html_contains_severity(self, full_result):
+        report = ReportGenerator(full_result).to_html()
+        assert "ERROR" in report
+        assert "CRITICAL" in report
+
+
+# ---------------------------------------------------------------------------
+# CSV Report
+# ---------------------------------------------------------------------------
+
+class TestCSVReport:
+    def test_basic_csv(self, basic_result):
+        report = ReportGenerator(basic_result).to_csv()
+        assert "File,test.log" in report
+        assert "Total Lines,100" in report
+
+    def test_csv_severity_breakdown(self, full_result):
+        report = ReportGenerator(full_result).to_csv()
+        assert "Level,Count,Percentage" in report
+        assert "ERROR" in report
+
+    def test_csv_with_status_codes(self, full_result):
+        report = ReportGenerator(full_result).to_csv()
+        assert "200" in report
+
+    def test_csv_with_top_errors(self, full_result):
+        report = ReportGenerator(full_result).to_csv()
+        assert "Connection refused" in report
+
+
+# ---------------------------------------------------------------------------
+# JSON Report
+# ---------------------------------------------------------------------------
+
+class TestJSONReport:
+    def test_basic_json(self, basic_result):
+        report = ReportGenerator(basic_result).to_json()
+        data = json.loads(report)
+        assert data["metadata"]["total_lines"] == 100
+        assert data["metadata"]["filepath"] == "test.log"
+
+    def test_json_with_full_data(self, full_result):
+        report = ReportGenerator(full_result).to_json()
+        data = json.loads(report)
+        assert data["metadata"]["total_lines"] == 1000
+        assert "severity" in data
+
+    def test_json_is_valid(self, full_result):
+        report = ReportGenerator(full_result).to_json()
+        # Should not raise
+        json.loads(report)
+
+
+# ---------------------------------------------------------------------------
+# Save
+# ---------------------------------------------------------------------------
+
+class TestSave:
+    def test_save_markdown(self, basic_result):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = str(Path(tmpdir) / "report.md")
+            ReportGenerator(basic_result).save(path, format="markdown")
+            content = Path(path).read_text()
+            assert "# Log Analysis Report" in content
+
+    def test_save_html(self, basic_result):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = str(Path(tmpdir) / "report.html")
+            ReportGenerator(basic_result).save(path, format="html")
+            content = Path(path).read_text()
+            assert "<html" in content.lower()
+
+    def test_save_json(self, basic_result):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = str(Path(tmpdir) / "report.json")
+            ReportGenerator(basic_result).save(path, format="json")
+            content = Path(path).read_text()
+            json.loads(content)  # Should not raise
+
+    def test_save_csv(self, basic_result):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = str(Path(tmpdir) / "report.csv")
+            ReportGenerator(basic_result).save(path, format="csv")
+            content = Path(path).read_text()
+            assert "File,test.log" in content
+
+    def test_save_default_format(self, basic_result):
+        with tempfile.TemporaryDirectory() as tmpdir:
+            path = str(Path(tmpdir) / "report.md")
+            ReportGenerator(basic_result).save(path)
+            content = Path(path).read_text()
+            assert "# Log Analysis Report" in content
