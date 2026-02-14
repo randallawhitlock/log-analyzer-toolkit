@@ -11,8 +11,10 @@ from pydantic import BaseModel, ConfigDict, Field
 
 # ==================== Analysis Schemas ====================
 
+
 class AnalysisBase(BaseModel):
     """Base schema with common analysis fields."""
+
     filename: str
     detected_format: str
     total_lines: int
@@ -24,6 +26,7 @@ class AnalysisBase(BaseModel):
 
 class AnalysisCreate(BaseModel):
     """Schema for creating an analysis (used internally)."""
+
     filename: str
     detected_format: str
     total_lines: int
@@ -43,6 +46,7 @@ class AnalysisCreate(BaseModel):
 
 class AnalysisResponse(BaseModel):
     """Schema for analysis API response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -60,11 +64,13 @@ class AnalysisResponse(BaseModel):
     earliest_timestamp: Optional[datetime] = None
     latest_timestamp: Optional[datetime] = None
     time_span: Optional[str] = None
+    file_path: Optional[str] = None
     created_at: datetime
 
 
 class AnalysisListResponse(BaseModel):
     """Schema for paginated analysis list response."""
+
     analyses: list[AnalysisResponse]
     total: int
     page: int
@@ -74,8 +80,10 @@ class AnalysisListResponse(BaseModel):
 
 # ==================== Triage Schemas ====================
 
+
 class TriageIssue(BaseModel):
     """Schema for a single triage issue."""
+
     title: str
     severity: str
     confidence: float
@@ -86,6 +94,7 @@ class TriageIssue(BaseModel):
 
 class TriageCreate(BaseModel):
     """Schema for creating a triage."""
+
     analysis_id: str
     summary: str
     overall_severity: str
@@ -98,29 +107,28 @@ class TriageCreate(BaseModel):
 
 class TriageRequest(BaseModel):
     """Schema for triage request."""
+
     analysis_id: str
     provider: Optional[str] = Field(
-        None,
-        description="AI provider to use (anthropic, gemini, ollama). Auto-selects if not provided."
+        None, description="AI provider to use (anthropic, gemini, ollama). Auto-selects if not provided."
     )
 
 
 class DeepDiveRequest(BaseModel):
     """Schema for deep dive analysis of a specific issue."""
+
     analysis_id: str
     issue_title: str
     issue_description: str
     issue_severity: str
     issue_recommendation: str
     affected_components: list[str] = []
-    provider: Optional[str] = Field(
-        None,
-        description="AI provider to use. Auto-selects if not provided."
-    )
+    provider: Optional[str] = Field(None, description="AI provider to use. Auto-selects if not provided.")
 
 
 class DeepDiveResponse(BaseModel):
     """Schema for deep dive analysis result."""
+
     issue_title: str
     detailed_analysis: str
     provider_used: str
@@ -130,6 +138,7 @@ class DeepDiveResponse(BaseModel):
 
 class TriageResponse(BaseModel):
     """Schema for triage API response."""
+
     model_config = ConfigDict(from_attributes=True)
 
     id: str
@@ -145,19 +154,23 @@ class TriageResponse(BaseModel):
 
 # ==================== General Response Schemas ====================
 
+
 class ErrorResponse(BaseModel):
     """Schema for error responses."""
+
     detail: str
     error_type: Optional[str] = None
 
 
 class SuccessResponse(BaseModel):
     """Schema for simple success responses."""
+
     message: str
 
 
 class HealthResponse(BaseModel):
     """Schema for health check response."""
+
     status: str
     version: str
     timestamp: datetime
@@ -165,5 +178,6 @@ class HealthResponse(BaseModel):
 
 class FormatsResponse(BaseModel):
     """Schema for supported formats response."""
+
     formats: list[dict[str, str]]
     total: int

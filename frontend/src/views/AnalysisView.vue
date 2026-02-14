@@ -30,6 +30,9 @@
           <button @click="exportJSON" class="export-btn" title="Download analysis as JSON">
             📥 Export
           </button>
+          <button @click="toggleLiveTail" class="live-btn" :class="{ active: showLiveTail }">
+            🔴 Live Tail
+          </button>
           <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn">
             <span v-if="triageLoading" class="btn-spinner"></span>
             {{ triageLoading ? 'Running...' : '🤖 Run AI Triage' }}
@@ -70,8 +73,13 @@
         />
       </section>
 
+      <!-- Live Log Viewer -->
+      <section v-if="showLiveTail" class="panel live-section">
+        <LiveLogViewer :file-path="analysis.file_path" />
+      </section>
+
       <!-- Main Content Grid -->
-      <div class="content-grid">
+      <div v-else class="content-grid">
         <!-- Level Chart -->
         <LevelChart :level-counts="analysis.level_counts" />
 
@@ -90,8 +98,8 @@
         <section v-if="hasStatusCodes" class="panel status-codes">
           <h3>HTTP Status Codes</h3>
           <div class="status-grid">
-            <div 
-              v-for="(count, code) in analysis.status_codes" 
+            <div
+              v-for="(count, code) in analysis.status_codes"
               :key="code"
               class="status-item"
               :class="getStatusClass(code)"
@@ -131,7 +139,7 @@
           <span class="section-icon">🤖</span>
           AI Triage Results
         </h2>
-        
+
         <div class="triage-header">
           <div class="severity-badge" :class="`severity-${triage.overall_severity.toLowerCase()}`">
             {{ triage.overall_severity }}
@@ -158,7 +166,7 @@
               <span class="issue-title">{{ issue.title }}</span>
             </div>
             <div class="issue-description markdown-content" v-html="renderMarkdown(issue.description)"></div>
-            
+
             <!-- Root Cause Analysis -->
             <div v-if="issue.root_cause_analysis" class="issue-root-cause">
               <strong>🔬 Root Cause Analysis:</strong>
@@ -208,6 +216,7 @@ import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import StatCard from '../components/StatCard.vue'
 import LevelChart from '../components/LevelChart.vue'
+import LiveLogViewer from '../components/LiveLogViewer.vue'
 import { useApi } from '../composables/useApi'
 
 // Configure marked for safe rendering
@@ -223,20 +232,21 @@ const renderMarkdown = (text) => {
 
 const route = useRoute()
 const router = useRouter()
-const { 
-  getAnalysis, 
-  deleteAnalysis, 
-  runTriage, 
+const {
+  getAnalysis,
+  deleteAnalysis,
+  runTriage,
   getTriagesForAnalysis,
   deepDiveIssue,
-  loading, 
-  error 
+  loading,
+  error
 } = useApi()
 
 const analysis = ref(null)
 const triage = ref(null)
 const triageLoading = ref(false)
 const showSample = ref(false)
+const showLiveTail = ref(false)
 const loadingSamples = ref(false)
 const logSamples = ref([])
 const deepDiveLoading = ref({})
@@ -327,7 +337,7 @@ const runDeepDive = async (idx, issue) => {
 
 const deleteCurrentAnalysis = async () => {
   if (!confirm('Are you sure you want to delete this analysis?')) return
-  
+
   try {
     await deleteAnalysis(route.params.id)
     router.push('/')
@@ -342,7 +352,7 @@ const deleteCurrentAnalysis = async () => {
  */
 const exportJSON = () => {
   if (!analysis.value) return
-  
+
   const exportData = {
     filename: analysis.value.filename,
     detected_format: analysis.value.detected_format,
@@ -365,7 +375,7 @@ const exportJSON = () => {
     },
     triage: triage.value || null
   }
-  
+
   const blob = new Blob([JSON.stringify(exportData, null, 2)], { type: 'application/json' })
   const url = URL.createObjectURL(blob)
   const a = document.createElement('a')
@@ -401,10 +411,14 @@ const loadLogSamples = () => {
   }, 300)
 }
 
+const toggleLiveTail = () => {
+  showLiveTail.value = !showLiveTail.value
+}
+
 onMounted(async () => {
   try {
     analysis.value = await getAnalysis(route.params.id)
-    
+
     // Check for existing triages
     const triages = await getTriagesForAnalysis(route.params.id)
     if (triages && triages.length > 0) {
@@ -550,6 +564,27 @@ onMounted(async () => {
 
 .delete-btn:hover {
   background: var(--color-error, #f44336);
+}
+
+.live-btn {
+  padding: 10px 16px;
+  border: 1px solid var(--color-error, #f44336);
+  background: transparent;
+  color: var(--color-error, #f44336);
+  border-radius: 8px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.live-btn:hover,
+.live-btn.active {
+  background: var(--color-error, #f44336);
+  color: white;
+}
+
+.live-section {
+  margin-bottom: 32px;
 }
 
 /* Stats Grid */

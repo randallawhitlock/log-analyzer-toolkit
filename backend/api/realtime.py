@@ -1,171 +1,154 @@
 """
-Real-time log streaming endpoints.
+Real-time log streaming endpoints using WebSockets and Watchdog.
 """
+
 import asyncio
-import json
-from collections.abc import AsyncGenerator
+import logging
+import re
 from datetime import datetime
 from pathlib import Path
+from typing import Optional
 
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from fastapi.responses import StreamingResponse
+import aiofiles
+from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
+from watchdog.events import FileSystemEventHandler
+from watchdog.observers import Observer
 
 router = APIRouter(prefix="/realtime", tags=["realtime"])
+logger = logging.getLogger(__name__)
 
 
-class ConnectionManager:
-    """Manage WebSocket connections for real-time updates."""
+class LogFileEventHandler(FileSystemEventHandler):
+    """
+    Watchdog event handler that triggers a callback when a specific file is modified.
+    """
 
-    def __init__(self):
-        self.active_connections: list[WebSocket] = []
+    def __init__(self, file_path: str, callback):
+        self.file_path = str(Path(file_path).resolve())
+        self.callback = callback
 
-    async def connect(self, websocket: WebSocket):
-        await websocket.accept()
-        self.active_connections.append(websocket)
-
-    def disconnect(self, websocket: WebSocket):
-        self.active_connections.remove(websocket)
-
-    async def broadcast(self, message: dict):
-        """Send message to all connected clients."""
-        dead_connections = []
-        for connection in self.active_connections:
-            try:
-                await connection.send_json(message)
-            except Exception:
-                dead_connections.append(connection)
-
-        # Clean up dead connections
-        for conn in dead_connections:
-            self.active_connections.remove(conn)
+    def on_modified(self, event):
+        if not event.is_directory and str(Path(event.src_path).resolve()) == self.file_path:
+            self.callback()
 
 
-manager = ConnectionManager()
+class LogTailer:
+    """
+    Manages tailing of a single log file for a WebSocket connection.
+    """
+
+    def __init__(self, websocket: WebSocket, file_path: str, filter_regex: Optional[str] = None):
+        self.websocket = websocket
+        self.file_path = Path(file_path).resolve()
+        self.filter_pattern = re.compile(filter_regex) if filter_regex else None
+        self.observer = None
+        self._stop_event = asyncio.Event()
+        self.last_pos = 0
+
+    async def start(self):
+        """Start tailing the file."""
+        if not self.file_path.exists():
+            await self.websocket.send_json({"error": f"File not found: {self.file_path}"})
+            return
+
+        # Send initial tail (last 50 lines)
+        await self._send_initial_lines()
+
+        # Set up watchdog observer
+        loop = asyncio.get_running_loop()
+
+        def on_file_modified():
+            """Callback for watchdog thread to schedule async read."""
+            asyncio.run_coroutine_threadsafe(self._process_new_lines(), loop)
+
+        event_handler = LogFileEventHandler(str(self.file_path), on_file_modified)
+        self.observer = Observer()
+        self.observer.schedule(event_handler, str(self.file_path.parent), recursive=False)
+        self.observer.start()
+
+        try:
+            # Keep connection alive until client disconnects
+            while not self._stop_event.is_set():
+                await self.websocket.receive_text()  # Wait for any message (ping/close)
+        except WebSocketDisconnect:
+            pass
+        finally:
+            self.stop()
+
+    def stop(self):
+        """Stop the tailer and clean up."""
+        self._stop_event.set()
+        if self.observer:
+            self.observer.stop()
+            self.observer.join()
+
+    async def _send_initial_lines(self, n: int = 50):
+        """Read and send the last N lines of the file."""
+        try:
+            async with aiofiles.open(self.file_path) as f:
+                # Move to end to get size
+                await f.seek(0, 2)
+                file_size = await f.tell()
+
+                # Simple heuristic: Read last 8KB if file is large, or all if small
+                read_size = min(file_size, 8192)
+                if read_size > 0:
+                    await f.seek(file_size - read_size)
+                    content = await f.read()
+                    lines = content.splitlines()
+                    # Return last N lines
+                    initial_lines = lines[-n:] if len(lines) > n else lines
+
+                    for line in initial_lines:
+                        await self._send_line(line)
+
+                self.last_pos = await f.tell()
+        except Exception as e:
+            logger.error(f"Error reading initial lines: {e}")
+            await self.websocket.send_json({"error": str(e)})
+
+    async def _process_new_lines(self):
+        """Read new data from file since last position."""
+        try:
+            async with aiofiles.open(self.file_path) as f:
+                await f.seek(self.last_pos)
+                new_content = await f.read()
+                if new_content:
+                    self.last_pos = await f.tell()
+                    for line in new_content.splitlines():
+                        await self._send_line(line)
+        except Exception as e:
+            logger.error(f"Error processing new lines: {e}")
+
+    async def _send_line(self, line: str):
+        """Send a line to the websocket if it matches the filter."""
+        if not line.strip():
+            return
+
+        if self.filter_pattern and not self.filter_pattern.search(line):
+            return
+
+        try:
+            await self.websocket.send_json({"timestamp": datetime.utcnow().isoformat(), "line": line})
+        except Exception:
+            # Connection likely closed
+            self.stop()
 
 
 @router.websocket("/ws/logs/tail")
-async def websocket_tail_logs(websocket: WebSocket):
+async def websocket_tail_logs(
+    websocket: WebSocket,
+    file: str = Query(..., description="Path to log file"),
+    filter: Optional[str] = Query(None, description="Regex filter"),
+):
     """
-    WebSocket endpoint for tailing log files in real-time.
+    WebSocket endpoint for real-time log tailing.
 
-    Client sends: {"file": "path/to/file.log", "lines": 50}
-    Server streams: new log lines as they appear
+    Query Params:
+    - file: Absolute path to the log file
+    - filter: Optional regex pattern to filter lines
     """
-    await manager.connect(websocket)
+    await websocket.accept()
 
-    try:
-        # Receive initial request
-        data = await websocket.receive_json()
-        file_path = data.get("file")
-        lines = data.get("lines", 50)
-
-        if not file_path:
-            await websocket.send_json({"error": "file parameter required"})
-            return
-
-        # Tail the file
-        async for line in tail_file(file_path, lines):
-            await websocket.send_json({
-                "type": "log_line",
-                "timestamp": datetime.utcnow().isoformat(),
-                "line": line
-            })
-
-    except WebSocketDisconnect:
-        manager.disconnect(websocket)
-    except Exception as e:
-        await websocket.send_json({"error": str(e)})
-
-
-@router.get("/stream/errors")
-async def stream_errors():
-    """
-    Server-Sent Events endpoint for streaming errors in real-time.
-
-    Usage:
-      const eventSource = new EventSource('/realtime/stream/errors');
-      eventSource.onmessage = (e) => console.log(JSON.parse(e.data));
-    """
-    async def generate():
-        while True:
-            # Check for new errors (poll database/cache)
-            errors = await get_recent_errors()
-
-            for error in errors:
-                yield f"data: {json.dumps(error)}\n\n"
-
-            await asyncio.sleep(2)  # Poll every 2 seconds
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream",
-        headers={
-            "Cache-Control": "no-cache",
-            "Connection": "keep-alive",
-        }
-    )
-
-
-@router.get("/tail/{file_id}")
-async def tail_log_file(file_id: str, lines: int = 100):
-    """
-    REST endpoint to tail a log file.
-
-    Returns the last N lines and continues streaming new lines.
-    """
-    async def generate():
-        async for line in tail_file(file_id, lines):
-            yield f"data: {json.dumps({'line': line})}\n\n"
-
-    return StreamingResponse(
-        generate(),
-        media_type="text/event-stream"
-    )
-
-
-# Helper functions
-
-async def tail_file(file_path: str, lines: int = 50) -> AsyncGenerator[str, None]:
-    """
-    Async generator to tail a file (like `tail -f`).
-
-    Yields new lines as they appear in the file.
-    """
-    try:
-        path = Path(file_path)
-        if not path.exists():
-            yield f"Error: File not found: {file_path}"
-            return
-
-        # Read last N lines initially
-        with open(path) as f:
-            # Simple approach: read all and take last N
-            all_lines = f.readlines()
-            for line in all_lines[-lines:]:
-                yield line.strip()
-
-        # Continue watching for new lines
-        with open(path) as f:
-            # Seek to end
-            f.seek(0, 2)
-
-            while True:
-                line = f.readline()
-                if line:
-                    yield line.strip()
-                else:
-                    await asyncio.sleep(0.5)  # Wait for new data
-
-    except Exception as e:
-        yield f"Error tailing file: {str(e)}"
-
-
-async def get_recent_errors() -> list[dict]:
-    """
-    Get recent errors from the database or cache.
-
-    This is a placeholder - implement based on your storage backend.
-    """
-    # TODO: Query actual error store
-    # For now, return empty list
-    return []
+    tailer = LogTailer(websocket, file, filter)
+    await tailer.start()
