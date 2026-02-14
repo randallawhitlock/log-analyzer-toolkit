@@ -77,6 +77,13 @@ addopts = [
     "--cov-report=term-missing",
     "--cov-fail-under=90",
 ]
+filterwarnings = [
+    "ignore::FutureWarning:google.auth.*:",
+    "ignore::FutureWarning:google.oauth2.*:",
+    "ignore::FutureWarning:google.api_core.*:",
+    "ignore:.*support for the .google.generativeai. package has ended.*:FutureWarning",
+    "ignore:.*urllib3 v2 only supports OpenSSL.*:urllib3.exceptions.NotOpenSSLWarning",
+]
 
 [tool.coverage.run]
 source = ["log_analyzer"]
