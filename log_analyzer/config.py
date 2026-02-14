@@ -27,6 +27,7 @@ from typing import Optional
 # Try to import yaml, but make it optional
 try:
     import yaml
+
     YAML_AVAILABLE = True
 except ImportError:
     YAML_AVAILABLE = False
@@ -52,7 +53,7 @@ ENV_VARS = {
 
 # Default model configurations (latest as of Feb 2026)
 DEFAULT_MODELS = {
-    "anthropic": "claude-sonnet-4-5-20250929",
+    "anthropic": "claude-3-5-sonnet-latest",
     "gemini": "gemini-2.5-flash",
     "ollama": "llama3",
 }
@@ -83,10 +84,7 @@ class ProviderConfig:
     def __repr__(self) -> str:
         """Mask API key in string representation."""
         key_display = "***" if self.api_key else None
-        return (
-            f"ProviderConfig(enabled={self.enabled}, "
-            f"model={self.model!r}, api_key={key_display})"
-        )
+        return f"ProviderConfig(enabled={self.enabled}, " f"model={self.model!r}, api_key={key_display})"
 
 
 @dataclass
@@ -110,9 +108,7 @@ class Config:
         """Initialize default provider configs if not provided."""
         for provider in ["anthropic", "gemini", "ollama"]:
             if provider not in self.providers:
-                self.providers[provider] = ProviderConfig(
-                    model=DEFAULT_MODELS.get(provider)
-                )
+                self.providers[provider] = ProviderConfig(model=DEFAULT_MODELS.get(provider))
 
     def get_provider_config(self, provider: str) -> ProviderConfig:
         """
@@ -125,9 +121,7 @@ class Config:
             ProviderConfig for the provider
         """
         if provider not in self.providers:
-            self.providers[provider] = ProviderConfig(
-                model=DEFAULT_MODELS.get(provider)
-            )
+            self.providers[provider] = ProviderConfig(model=DEFAULT_MODELS.get(provider))
         return self.providers[provider]
 
     def get_api_key(self, provider: str) -> Optional[str]:
@@ -229,9 +223,9 @@ def check_config_permissions(path: Path) -> bool:
         # Check if group or others can read
         if mode & (stat.S_IRGRP | stat.S_IROTH):
             warnings.warn(
-                f"Config file {path} is readable by others. "
-                "Consider running: chmod 600 {path}",
-                UserWarning, stacklevel=2,
+                f"Config file {path} is readable by others. " "Consider running: chmod 600 {path}",
+                UserWarning,
+                stacklevel=2,
             )
             return False
 
@@ -274,15 +268,14 @@ def load_config(path: Optional[Path] = None) -> Config:
                     config.providers[name] = ProviderConfig(
                         enabled=prov_data.get("enabled", True),
                         model=prov_data.get("model"),
-                        extra={
-                            k: v for k, v in prov_data.items()
-                            if k not in ("enabled", "model", "api_key")
-                        },
+                        extra={k: v for k, v in prov_data.items() if k not in ("enabled", "model", "api_key")},
                     )
 
-            logger.info(f"Loaded configuration from {config_path}: "
-                       f"default_provider={config.default_provider}, "
-                       f"providers={list(providers_data.keys())}")
+            logger.info(
+                f"Loaded configuration from {config_path}: "
+                f"default_provider={config.default_provider}, "
+                f"providers={list(providers_data.keys())}"
+            )
         except OSError as e:
             logger.error(f"Failed to read config file {config_path}: {e}")
             warnings.warn(f"Error loading config from {config_path}: {e}", stacklevel=2)
@@ -333,9 +326,7 @@ def save_config(config: Config, path: Optional[Path] = None) -> Path:
     """
     if not YAML_AVAILABLE:
         logger.error("Attempted to save config but PyYAML not installed")
-        raise ImportError(
-            "PyYAML is required to save config. Run: pip install pyyaml"
-        )
+        raise ImportError("PyYAML is required to save config. Run: pip install pyyaml")
 
     config_path = path or DEFAULT_CONFIG_FILE
     logger.info(f"Saving configuration to {config_path}")
@@ -413,6 +404,7 @@ def get_provider_status() -> dict[str, dict]:
         if provider == "ollama":
             try:
                 from .ai_providers.ollama_provider import OllamaProvider
+
                 ollama = OllamaProvider()
                 status[provider]["server_available"] = ollama.is_available()
                 logger.debug(f"Ollama server availability: {status[provider]['server_available']}")

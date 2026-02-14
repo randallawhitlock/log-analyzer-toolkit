@@ -25,13 +25,13 @@ from .base import (
 
 # Latest Claude models as of February 2026
 CLAUDE_MODELS = {
-    "claude-sonnet-4-5": "claude-sonnet-4-5-20250929",  # Best balance of capability and cost
-    "claude-opus-4-5": "claude-opus-4-5-20251124",      # Most capable model
-    "claude-haiku-4-5": "claude-haiku-4-5-20251015",    # Fastest, most cost-effective
+    "claude-sonnet-3-5": "claude-3-5-sonnet-latest",  # Best balance of capability and cost
+    "claude-opus-3-5": "claude-3-opus-latest",  # Most capable model
+    "claude-haiku-3-5": "claude-3-haiku-20240307",  # Fastest, most cost-effective
 }
 
-# Default model - Sonnet 4.5 offers best balance for log analysis
-DEFAULT_MODEL = CLAUDE_MODELS["claude-sonnet-4-5"]
+# Default model - Sonnet 3.5 offers best balance for log analysis
+DEFAULT_MODEL = CLAUDE_MODELS["claude-sonnet-3-5"]
 
 
 class AnthropicProvider(AIProvider):
@@ -43,7 +43,7 @@ class AnthropicProvider(AIProvider):
 
     Attributes:
         name: Provider identifier ('anthropic')
-        default_model: Default model to use (Claude Sonnet 4.5)
+        default_model: Default model to use (Claude Sonnet 3.5)
     """
 
     name = "anthropic"
@@ -100,17 +100,12 @@ class AnthropicProvider(AIProvider):
             return self._client
 
         if not self._api_key:
-            raise AuthenticationError(
-                "Anthropic API key not found. "
-                "Set the ANTHROPIC_API_KEY environment variable."
-            )
+            raise AuthenticationError("Anthropic API key not found. " "Set the ANTHROPIC_API_KEY environment variable.")
 
         try:
             import anthropic
         except ImportError:
-            raise ProviderNotAvailableError(
-                "Anthropic SDK not installed. Run: pip install anthropic"
-            ) from None
+            raise ProviderNotAvailableError("Anthropic SDK not installed. Run: pip install anthropic") from None
 
         self._client = anthropic.Anthropic(
             api_key=self._api_key,
@@ -133,6 +128,7 @@ class AnthropicProvider(AIProvider):
         # Check if SDK is installed
         try:
             import anthropic  # noqa: F401
+
             return True
         except ImportError:
             return False
@@ -205,15 +201,13 @@ class AnthropicProvider(AIProvider):
             )
 
         except anthropic.AuthenticationError as e:
-            raise AuthenticationError(
-                "Invalid Anthropic API key. Please check your ANTHROPIC_API_KEY."
-            ) from e
+            raise AuthenticationError("Invalid Anthropic API key. Please check your ANTHROPIC_API_KEY.") from e
 
         except anthropic.RateLimitError as e:
             # Try to extract retry-after if available
             retry_after = None
-            if hasattr(e, 'response') and e.response:
-                retry_after = e.response.headers.get('retry-after')
+            if hasattr(e, "response") and e.response:
+                retry_after = e.response.headers.get("retry-after")
                 if retry_after:
                     try:
                         retry_after = float(retry_after)
@@ -229,9 +223,7 @@ class AnthropicProvider(AIProvider):
             raise AIError(f"Anthropic API error: {e.status_code}") from e
 
         except anthropic.APIConnectionError as e:
-            raise AIError(
-                "Failed to connect to Anthropic API. Check your internet connection."
-            ) from e
+            raise AIError("Failed to connect to Anthropic API. Check your internet connection.") from e
 
         except Exception as e:
             raise AIError(f"Unexpected error calling Anthropic API: {type(e).__name__}") from e

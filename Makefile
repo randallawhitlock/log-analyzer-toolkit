@@ -41,3 +41,6 @@ clean:
 	rm -rf build
 	rm -rf *.egg-info
 	find . -type d -name "__pycache__" -exec rm -rf {} +
+
+dev:
+	./run_dev.sh

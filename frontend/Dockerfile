@@ -13,6 +13,10 @@ RUN npm ci
 # Copy source code
 COPY . .
 
+# Development stage
+FROM build-stage as development
+CMD ["npm", "run", "dev", "--", "--host"]
+
 # Build the application
 RUN npm run build
 

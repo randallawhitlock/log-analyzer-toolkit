@@ -7,8 +7,11 @@ services:
       - "8000:8000"
     volumes:
       - ./backend/uploads:/app/backend/uploads
+      - ./backend:/app/backend
+      - ./log_analyzer:/app/log_analyzer
     environment:
       - LOG_ANALYZER_MAX_WORKERS=4
+    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
     restart: unless-stopped
     networks:
       - log-analyzer-net
@@ -17,8 +20,12 @@ services:
     build:
       context: ./frontend
       dockerfile: Dockerfile
+      target: development
     ports:
-      - "8080:80"
+      - "5173:5173"
+    volumes:
+      - ./frontend:/app
+      - /app/node_modules
     depends_on:
       - backend
     restart: unless-stopped
