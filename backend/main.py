@@ -32,7 +32,7 @@ logger = logging.getLogger(__name__)
 app = FastAPI(
     title="Log Analyzer Toolkit API",
     description="REST API for analyzing and troubleshooting log files",
-    version="0.2.0",
+    version="0.2.1",
     docs_url="/docs",
     redoc_url="/redoc",
 )
@@ -91,7 +91,7 @@ async def health_check():
     Returns:
         HealthResponse: Current health status and version
     """
-    return HealthResponse(status="healthy", version="0.2.0", timestamp=datetime.utcnow())
+    return HealthResponse(status="healthy", version="0.2.1", timestamp=datetime.utcnow())
 
 
 # Root endpoint

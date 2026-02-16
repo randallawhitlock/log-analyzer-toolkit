@@ -44,3 +44,6 @@ clean:
 
 dev:
 	./run_dev.sh
+
+release:
+	./scripts/release.sh $(v)
