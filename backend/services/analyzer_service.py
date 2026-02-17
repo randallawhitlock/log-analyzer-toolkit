@@ -46,13 +46,15 @@ class AnalyzerService:
         """
         logger.debug(f"Saving uploaded file: {file.filename}")
 
-        # Generate unique filename
+        # Generate unique filename with sanitized extension
         file_id = str(uuid.uuid4())
-        file_extension = os.path.splitext(file.filename)[1] or ".log"
+        _, raw_ext = os.path.splitext(file.filename)
+        # Sanitize extension: only allow alphanumeric chars and dots
+        file_extension = raw_ext if raw_ext and raw_ext[1:].isalnum() else ".log"
         file_path = os.path.join(UPLOAD_DIRECTORY, f"{file_id}{file_extension}")
 
         # Save file asynchronously
-        async with aiofiles.open(file_path, 'wb') as out_file:
+        async with aiofiles.open(file_path, "wb") as out_file:
             content = await file.read()
             file_size = len(content)
             await out_file.write(content)
@@ -60,11 +62,7 @@ class AnalyzerService:
         logger.info(f"Saved file {file.filename} ({file_size:,} bytes) to {file_path}")
         return file_path
 
-    def analyze_file(
-        self,
-        file_path: str,
-        max_errors: int = DEFAULT_MAX_ERRORS
-    ) -> AnalysisResult:
+    def analyze_file(self, file_path: str, max_errors: int = DEFAULT_MAX_ERRORS) -> AnalysisResult:
         """
         Analyze a log file using LogAnalyzer.
 
@@ -80,23 +78,16 @@ class AnalyzerService:
         """
         logger.info(f"Starting analysis of {file_path} (max_errors={max_errors})")
 
-        result = self.analyzer.analyze(
-            file_path,
-            max_errors=max_errors,
-            use_fallback=True
-        )
+        result = self.analyzer.analyze(file_path, max_errors=max_errors, use_fallback=True)
 
-        logger.info(f"Analysis complete: {result.parsed_lines:,} lines parsed, "
-                   f"format={result.detected_format}, error_rate={result.error_rate:.1f}%")
+        logger.info(
+            f"Analysis complete: {result.parsed_lines:,} lines parsed, "
+            f"format={result.detected_format}, error_rate={result.error_rate:.1f}%"
+        )
 
         return result
 
-    def analysis_result_to_dict(
-        self,
-        result: AnalysisResult,
-        file_path: str,
-        original_filename: str
-    ) -> dict:
+    def analysis_result_to_dict(self, result: AnalysisResult, file_path: str, original_filename: str) -> dict:
         """
         Convert AnalysisResult to dictionary for database storage.
 
@@ -123,15 +114,11 @@ class AnalyzerService:
             "earliest_timestamp": result.earliest_timestamp,
             "latest_timestamp": result.latest_timestamp,
             "time_span": str(result.time_span) if result.time_span else None,
-            "file_path": file_path
+            "file_path": file_path,
         }
 
     async def analyze_uploaded_file(
-        self,
-        file: UploadFile,
-        db: Session,
-        max_errors: int = DEFAULT_MAX_ERRORS,
-        log_format: str = "auto"
+        self, file: UploadFile, db: Session, max_errors: int = DEFAULT_MAX_ERRORS, log_format: str = "auto"
     ) -> models.Analysis:
         """
         Complete workflow: save file, analyze, store results.
@@ -158,11 +145,7 @@ class AnalyzerService:
             result = self.analyze_file(file_path, max_errors=max_errors)
 
             # Convert to dict
-            analysis_data = self.analysis_result_to_dict(
-                result,
-                file_path,
-                file.filename
-            )
+            analysis_data = self.analysis_result_to_dict(result, file_path, file.filename)
 
             # Store in database
             analysis = crud.create_analysis(db, analysis_data)
