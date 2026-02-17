@@ -1,5 +1,5 @@
 /**
- * Service for handling WebSocket connections for live log tailing.
+ * Service for handling WebSocket connections for live log tailing and replay.
  */
 export class LiveLogService {
     constructor(baseUrl) {
@@ -9,11 +9,27 @@ export class LiveLogService {
     }
 
     /**
-     * Connect to the WebSocket endpoint.
+     * Connect to the tail WebSocket endpoint (watches for file appends).
      * @param {string} analysisId - Analysis UUID to tail.
      * @param {string} [filter] - Optional regex filter.
      */
     connect(analysisId, filter = null) {
+        this._connectTo('/realtime/ws/logs/tail', analysisId, filter);
+    }
+
+    /**
+     * Connect to the replay WebSocket endpoint (streams file with parsed output).
+     * @param {string} analysisId - Analysis UUID to replay.
+     * @param {string} [filter] - Optional regex filter.
+     */
+    connectReplay(analysisId, filter = null) {
+        this._connectTo('/realtime/ws/logs/replay', analysisId, filter);
+    }
+
+    /**
+     * Internal: connect to a specific WebSocket path.
+     */
+    _connectTo(path, analysisId, filter = null) {
         if (this.socket) {
             this.disconnect();
         }
@@ -23,22 +39,30 @@ export class LiveLogService {
             params.append('filter', filter);
         }
 
-        const url = `${this.baseUrl}/realtime/ws/logs/tail?${params.toString()}`;
-        console.log(`Connecting to WebSocket: ${url}`);
+        const url = `${this.baseUrl}${path}?${params.toString()}`;
 
         this.socket = new WebSocket(url);
 
         this.socket.onopen = () => {
-            console.log('WebSocket connected');
             this._notify({ type: 'status', payload: 'connected' });
         };
 
         this.socket.onmessage = (event) => {
             try {
                 const data = JSON.parse(event.data);
-                if (data.error) {
+                if (data.type === 'error') {
+                    this._notify({ type: 'error', payload: data.error });
+                } else if (data.type === 'meta') {
+                    this._notify({ type: 'meta', payload: data });
+                } else if (data.type === 'complete') {
+                    this._notify({ type: 'complete', payload: data });
+                } else if (data.type === 'log') {
+                    this._notify({ type: 'log', payload: data });
+                } else if (data.error) {
+                    // Legacy tail format
                     this._notify({ type: 'error', payload: data.error });
                 } else {
+                    // Legacy tail format (no type field)
                     this._notify({ type: 'log', payload: data });
                 }
             } catch (e) {
@@ -46,15 +70,28 @@ export class LiveLogService {
             }
         };
 
-        this.socket.onerror = (error) => {
-            console.error('WebSocket error:', error);
+        this.socket.onerror = () => {
             this._notify({ type: 'error', payload: 'Connection error' });
         };
 
         this.socket.onclose = () => {
-            console.log('WebSocket disconnected');
             this._notify({ type: 'status', payload: 'disconnected' });
         };
+    }
+
+    /**
+     * Send a command to the replay WebSocket.
+     * @param {string} cmd - Command name (play, pause, speed, jump)
+     * @param {*} [value] - Optional value for the command
+     */
+    sendCommand(cmd, value = undefined) {
+        if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+            const msg = { cmd };
+            if (value !== undefined) {
+                msg.value = value;
+            }
+            this.socket.send(JSON.stringify(msg));
+        }
     }
 
     disconnect() {

@@ -31,7 +31,7 @@
             📥 Export
           </button>
           <button @click="toggleLiveTail" class="live-btn" :class="{ active: showLiveTail }">
-            🔴 Live Tail
+            {{ showLiveTail ? '✕ Close Viewer' : '▶ Log Viewer' }}
           </button>
           <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn">
             <span v-if="triageLoading" class="btn-spinner"></span>
