@@ -13,7 +13,8 @@ _env_path = Path(__file__).resolve().parent.parent / ".env"
 load_dotenv(_env_path, override=True)
 
 import logging  # noqa: E402
-from datetime import datetime  # noqa: E402
+from contextlib import asynccontextmanager  # noqa: E402
+from datetime import datetime, timezone  # noqa: E402
 
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
@@ -34,6 +35,16 @@ logger = logging.getLogger(__name__)
 # Rate limiter: 60 requests/minute per IP by default
 limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    """Initialize database on application startup."""
+    logger.info("Initializing database...")
+    init_db()
+    logger.info("Database initialized successfully")
+    yield
+
+
 # Create FastAPI app
 app = FastAPI(
     title="Log Analyzer Toolkit API",
@@ -41,6 +52,7 @@ app = FastAPI(
     version="0.2.1",
     docs_url="/docs",
     redoc_url="/redoc",
+    lifespan=lifespan,
 )
 
 # Rate limiting
@@ -83,15 +95,6 @@ app.add_middleware(LimitUploadSize, max_upload_size=MAX_UPLOAD_SIZE_BYTES)
 app.add_middleware(StructuredLoggingMiddleware)
 
 
-# Startup event to initialize database
-@app.on_event("startup")
-async def startup_event():
-    """Initialize database on application startup."""
-    logger.info("Initializing database...")
-    init_db()
-    logger.info("Database initialized successfully")
-
-
 # Health check endpoint
 @app.get("/health", response_model=HealthResponse, tags=["Health"])
 async def health_check():
@@ -101,7 +104,7 @@ async def health_check():
     Returns:
         HealthResponse: Current health status and version
     """
-    return HealthResponse(status="healthy", version="0.2.1", timestamp=datetime.utcnow())
+    return HealthResponse(status="healthy", version="0.2.1", timestamp=datetime.now(timezone.utc))
 
 
 # Root endpoint
@@ -113,7 +116,7 @@ async def root():
     Returns:
         dict: API information
     """
-    return {"message": "Log Analyzer Toolkit API", "version": "0.2.0", "docs": "/docs", "health": "/health"}
+    return {"message": "Log Analyzer Toolkit API", "version": "0.2.1", "docs": "/docs", "health": "/health"}
 
 
 # Import and include routers
