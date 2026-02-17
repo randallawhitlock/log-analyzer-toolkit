@@ -5,6 +5,7 @@ Provides REST API endpoints for log analysis and triage.
 """
 
 import logging
+import uuid as uuid_module
 from typing import Optional
 
 from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
@@ -39,6 +40,15 @@ router = APIRouter(
     tags=["Log Analysis"],
     dependencies=[Depends(get_api_key)],
 )
+
+
+def _validate_uuid(value: str, name: str = "ID") -> str:
+    """Validate that a string is a valid UUID."""
+    try:
+        uuid_module.UUID(value)
+    except ValueError as e:
+        raise HTTPException(status_code=400, detail=f"Invalid {name} format") from e
+    return value
 
 
 # ==================== Analysis Endpoints ====================
@@ -83,7 +93,7 @@ async def analyze_log_file(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except Exception as e:
         logger.error(f"Analysis failed for {file.filename}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Analysis failed: {str(e)}") from e
+        raise HTTPException(status_code=500, detail="Internal server error") from e
 
 
 @router.get("/analyses", response_model=schemas.AnalysisListResponse)
@@ -132,6 +142,7 @@ def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
     **Returns:**
     - Complete analysis details
     """
+    _validate_uuid(analysis_id, "analysis_id")
     analysis = crud.get_analysis(db, analysis_id)
     if not analysis:
         raise HTTPException(status_code=404, detail=f"Analysis {analysis_id} not found")
@@ -151,6 +162,7 @@ def delete_analysis(analysis_id: str, db: Session = Depends(get_db)):
 
     **Note:** This also deletes all associated triages (cascade delete)
     """
+    _validate_uuid(analysis_id, "analysis_id")
     # Get analysis to find file path
     analysis = crud.get_analysis(db, analysis_id)
     if not analysis:
@@ -202,7 +214,7 @@ def run_triage(request: schemas.TriageRequest, fastapi_request: Request, db: Ses
         ) from e
     except Exception as e:
         logger.error(f"Triage failed for analysis {request.analysis_id}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Triage failed: {str(e)}") from e
+        raise HTTPException(status_code=500, detail="Triage failed due to an internal error") from e
 
 
 @router.post("/triage/deep-dive", response_model=schemas.DeepDiveResponse, status_code=200)
@@ -251,7 +263,7 @@ def deep_dive_issue(request: schemas.DeepDiveRequest, fastapi_request: Request, 
         raise HTTPException(status_code=503, detail=f"AI Service Unavailable: {str(e)}") from e
     except Exception as e:
         logger.error(f"Deep dive failed for {request.issue_title}: {e}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Deep dive failed: {str(e)}") from e
+        raise HTTPException(status_code=500, detail="Deep dive failed due to an internal error") from e
 
 
 @router.get("/triage/{triage_id}", response_model=schemas.TriageResponse)
@@ -265,6 +277,7 @@ def get_triage(triage_id: str, db: Session = Depends(get_db)):
     **Returns:**
     - Complete triage details with issues and recommendations
     """
+    _validate_uuid(triage_id, "triage_id")
     triage = crud.get_triage(db, triage_id)
     if not triage:
         raise HTTPException(status_code=404, detail=f"Triage {triage_id} not found")
@@ -282,6 +295,7 @@ def get_triages_for_analysis(analysis_id: str, db: Session = Depends(get_db)):
     **Returns:**
     - List of all triage results for this analysis
     """
+    _validate_uuid(analysis_id, "analysis_id")
     # Verify analysis exists
     analysis = crud.get_analysis(db, analysis_id)
     if not analysis:
