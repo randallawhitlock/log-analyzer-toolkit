@@ -112,9 +112,9 @@ watch(() => props.filePath, () => {
 
 <style scoped>
 .live-log-viewer {
-  background: #1e1e1e; /* Darker background for terminal look */
-  border: 1px solid #333;
-  border-radius: 8px;
+  background: var(--color-bg-tertiary, #1e1e1e);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-lg);
   display: flex;
   flex-direction: column;
   height: 500px;
@@ -126,9 +126,9 @@ watch(() => props.filePath, () => {
   justify-content: space-between;
   align-items: center;
   padding: 12px 16px;
-  background: #252526;
-  border-bottom: 1px solid #333;
-  border-radius: 8px 8px 0 0;
+  background: var(--color-bg-secondary);
+  border-bottom: 1px solid var(--color-border);
+  border-radius: var(--radius-lg) var(--radius-lg) 0 0;
 }
 
 .header-left {
@@ -140,23 +140,23 @@ watch(() => props.filePath, () => {
 .header-left h3 {
   margin: 0;
   font-size: 14px;
-  color: #fff;
+  color: var(--color-text);
 }
 
 .status-badge {
   font-size: 11px;
   padding: 2px 8px;
-  border-radius: 10px;
-  background: #333;
-  color: #888;
+  border-radius: var(--radius-full);
+  background: var(--color-bg-tertiary, #333);
+  color: var(--color-text-muted);
   text-transform: uppercase;
   font-weight: bold;
 }
 
 .status-badge.connected {
-  background: #4caf5020;
-  color: #4caf50;
-  border: 1px solid #4caf5040;
+  background: var(--color-success-light);
+  color: var(--color-success);
+  border: 1px solid rgba(34, 197, 94, 0.25);
 }
 
 .header-controls {
@@ -175,24 +175,24 @@ watch(() => props.filePath, () => {
   position: absolute;
   left: 8px;
   font-size: 12px;
-  color: #666;
+  color: var(--color-text-dim);
 }
 
 .filter-input {
-  background: #333;
-  border: 1px solid #444;
-  color: #fff;
+  background: var(--color-bg-tertiary, #333);
+  border: 1px solid var(--color-border);
+  color: var(--color-text);
   padding: 4px 8px 4px 24px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   font-size: 12px;
   width: 150px;
-  transition: width 0.2s;
+  transition: width var(--transition-fast);
 }
 
 .filter-input:focus {
   width: 200px;
   outline: none;
-  border-color: #646cff;
+  border-color: var(--color-primary);
 }
 
 .autoscroll-toggle {
@@ -200,7 +200,7 @@ watch(() => props.filePath, () => {
   align-items: center;
   gap: 6px;
   font-size: 12px;
-  color: #aaa;
+  color: var(--color-text-muted);
   cursor: pointer;
   user-select: none;
 }
@@ -210,24 +210,25 @@ watch(() => props.filePath, () => {
   border: none;
   cursor: pointer;
   padding: 4px;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
+  color: var(--color-text-muted);
 }
 
 .clear-btn:hover {
-  background: #333;
+  background: var(--color-bg-tertiary, #333);
 }
 
 .log-container {
   flex: 1;
   overflow-y: auto;
   padding: 12px;
-  color: #d4d4d4;
+  color: var(--color-text-muted);
   font-size: 12px;
   line-height: 1.5;
 }
 
 .empty-state {
-  color: #666;
+  color: var(--color-text-dim);
   text-align: center;
   margin-top: 40px;
   font-style: italic;
@@ -240,11 +241,11 @@ watch(() => props.filePath, () => {
 }
 
 .log-entry:hover {
-  background: #ffffff05;
+  background: rgba(255, 255, 255, 0.02);
 }
 
 .timestamp {
-  color: #569cd6;
+  color: var(--color-info, #569cd6);
   flex-shrink: 0;
   user-select: none;
 }
@@ -260,16 +261,16 @@ watch(() => props.filePath, () => {
 }
 
 .log-container::-webkit-scrollbar-track {
-  background: #1e1e1e;
+  background: var(--color-bg-tertiary, #1e1e1e);
 }
 
 .log-container::-webkit-scrollbar-thumb {
-  background: #444;
+  background: var(--color-border);
   border-radius: 5px;
-  border: 2px solid #1e1e1e;
+  border: 2px solid var(--color-bg-tertiary, #1e1e1e);
 }
 
 .log-container::-webkit-scrollbar-thumb:hover {
-  background: #555;
+  background: var(--color-border-hover);
 }
 </style>

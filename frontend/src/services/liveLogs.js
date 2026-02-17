@@ -72,6 +72,14 @@ export class LiveLogService {
         this.listeners.push(callback);
     }
 
+    /**
+     * Remove a previously registered callback.
+     * @param {Function} callback - The callback to remove.
+     */
+    offMessage(callback) {
+        this.listeners = this.listeners.filter(l => l !== callback);
+    }
+
     _notify(event) {
         this.listeners.forEach(listener => listener(event));
     }

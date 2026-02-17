@@ -8,11 +8,11 @@
     <!-- Filters -->
     <div class="filters">
       <div class="filter-group">
-        <input 
-          v-model="searchQuery" 
+        <input
+          v-model="searchQuery"
           @input="debouncedSearch"
-          type="text" 
-          placeholder="🔍 Search filenames..." 
+          type="text"
+          placeholder="🔍 Search filenames..."
           class="search-input"
         />
         <select v-model="formatFilter" @change="loadAnalyses" class="filter-select">
@@ -93,8 +93,8 @@
 
       <!-- Pagination -->
       <div v-if="totalPages > 1" class="pagination">
-        <button 
-          @click="goToPage(currentPage - 1)" 
+        <button
+          @click="goToPage(currentPage - 1)"
           :disabled="currentPage <= 1"
           class="page-btn"
         >
@@ -103,8 +103,8 @@
         <span class="page-info">
           Page {{ currentPage }} of {{ totalPages }} ({{ total }} total)
         </span>
-        <button 
-          @click="goToPage(currentPage + 1)" 
+        <button
+          @click="goToPage(currentPage + 1)"
           :disabled="currentPage >= totalPages"
           class="page-btn"
         >
@@ -168,13 +168,13 @@ const loadAnalyses = async () => {
       limit: 200 // Load more for client-side filtering
     })
     allAnalyses.value = data.analyses
-    
+
     // Extract unique formats for filter
     if (availableFormats.value.length === 0) {
       const formats = new Set(data.analyses.map(a => a.detected_format))
       availableFormats.value = Array.from(formats).sort()
     }
-    
+
     filterAnalyses()
   } catch (err) {
     console.error('Failed to load analyses:', err)
@@ -183,25 +183,25 @@ const loadAnalyses = async () => {
 
 const filterAnalyses = () => {
   let filtered = [...allAnalyses.value]
-  
+
   // Filter by search query
   if (searchQuery.value.trim()) {
     const query = searchQuery.value.toLowerCase()
     filtered = filtered.filter(a => a.filename.toLowerCase().includes(query))
   }
-  
+
   // Filter by format
   if (formatFilter.value) {
     filtered = filtered.filter(a => a.detected_format === formatFilter.value)
   }
-  
+
   // Filter by errors only
   if (showErrorsOnly.value) {
     filtered = filtered.filter(a => a.error_rate > 0)
   }
-  
+
   total.value = filtered.length
-  
+
   // Apply pagination
   const start = (currentPage.value - 1) * perPage
   analyses.value = filtered.slice(start, start + perPage)
@@ -214,7 +214,7 @@ const goToPage = (page) => {
 
 const confirmDelete = async (analysis) => {
   if (!confirm(`Delete analysis "${analysis.filename}"?`)) return
-  
+
   try {
     await deleteAnalysis(analysis.id)
     await loadAnalyses()
@@ -231,125 +231,132 @@ onMounted(() => {
 
 <style scoped>
 .analyses-list-view {
-  max-width: 1200px;
+  max-width: 1100px;
   margin: 0 auto;
-  padding: 24px;
+  padding: var(--spacing-lg);
 }
 
 .page-header {
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
 }
 
 .back-link {
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
   text-decoration: none;
-  display: inline-block;
+  display: inline-flex;
+  align-items: center;
+  gap: 4px;
   margin-bottom: 12px;
+  font-size: 13px;
 }
 
 .back-link:hover {
-  color: var(--color-primary, #646cff);
+  color: var(--color-primary);
 }
 
 .page-header h1 {
   margin: 0;
-  font-size: 1.75rem;
+  font-size: 1.5rem;
 }
 
 .filters {
   display: flex;
   justify-content: space-between;
   align-items: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
   flex-wrap: wrap;
-  gap: 12px;
+  gap: 10px;
 }
 
 .filter-group {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 10px;
   flex-wrap: wrap;
 }
 
 .search-input {
-  padding: 10px 16px;
-  background: var(--color-bg-secondary, #1a1a2e);
-  border: 1px solid var(--color-border, #3a3a55);
-  border-radius: 8px;
-  color: var(--color-text, #fff);
-  font-size: 14px;
+  padding: 8px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 13px;
   min-width: 200px;
+  transition: all var(--transition-fast);
 }
 
 .search-input:focus {
   outline: none;
-  border-color: var(--color-primary, #646cff);
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-light);
 }
 
 .search-input::placeholder {
-  color: var(--color-text-dim, #666);
+  color: var(--color-text-dim);
 }
 
 .error-filter {
   display: flex;
   align-items: center;
   gap: 6px;
-  color: var(--color-text-muted, #888);
-  font-size: 14px;
+  color: var(--color-text-muted);
+  font-size: 13px;
   cursor: pointer;
 }
 
 .error-filter input[type="checkbox"] {
-  width: 16px;
-  height: 16px;
-  accent-color: var(--color-primary, #646cff);
+  width: 14px;
+  height: 14px;
+  accent-color: var(--color-primary);
 }
 
 .filter-select {
-  padding: 10px 16px;
-  background: var(--color-bg-secondary, #1a1a2e);
-  border: 1px solid var(--color-border, #3a3a55);
-  border-radius: 8px;
-  color: var(--color-text, #fff);
-  font-size: 14px;
+  padding: 8px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 13px;
 }
 
 .upload-btn,
 .upload-btn-large {
-  padding: 10px 20px;
-  background: var(--color-primary, #646cff);
+  padding: 8px 18px;
+  background: var(--color-primary);
   color: white;
   text-decoration: none;
-  border-radius: 8px;
+  border-radius: var(--radius-full);
   font-weight: 600;
-  transition: all 0.2s ease;
+  font-size: 13px;
+  transition: all var(--transition-fast);
 }
 
 .upload-btn:hover,
 .upload-btn-large:hover {
-  transform: translateY(-2px);
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
 }
 
 .upload-btn-large {
-  padding: 14px 28px;
-  font-size: 16px;
+  padding: 12px 24px;
+  font-size: 14px;
 }
 
 /* Loading & Empty States */
 .loading-state,
 .empty-state {
   text-align: center;
-  padding: 80px 24px;
+  padding: 80px var(--spacing-lg);
 }
 
 .spinner {
-  width: 40px;
-  height: 40px;
-  border: 3px solid var(--color-border, #3a3a55);
-  border-top-color: var(--color-primary, #646cff);
+  width: 32px;
+  height: 32px;
+  border: 2px solid var(--color-border);
+  border-top-color: var(--color-primary);
   border-radius: 50%;
-  animation: spin 1s linear infinite;
+  animation: spin 0.8s linear infinite;
   margin: 0 auto 16px;
 }
 
@@ -358,46 +365,50 @@ onMounted(() => {
 }
 
 .empty-icon {
-  font-size: 64px;
+  font-size: 48px;
   display: block;
   margin-bottom: 16px;
+  opacity: 0.6;
 }
 
 .empty-state h2 {
-  margin: 0 0 8px 0;
+  margin: 0 0 6px 0;
+  font-size: 1.25rem;
 }
 
 .empty-state p {
-  color: var(--color-text-muted, #888);
-  margin: 0 0 24px 0;
+  color: var(--color-text-muted);
+  margin: 0 0 20px 0;
+  font-size: 14px;
 }
 
 /* Table */
 .analyses-table-container {
   overflow-x: auto;
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
 }
 
 .analyses-table {
   width: 100%;
   border-collapse: collapse;
-  background: var(--color-bg-secondary, #1a1a2e);
-  border-radius: 12px;
-  overflow: hidden;
+  background: var(--color-bg-secondary);
 }
 
 .analyses-table th,
 .analyses-table td {
-  padding: 14px 16px;
+  padding: 12px 16px;
   text-align: left;
-  border-bottom: 1px solid var(--color-border, #3a3a55);
+  border-bottom: 1px solid var(--color-border);
 }
 
 .analyses-table th {
-  background: var(--color-bg-tertiary, #2a2a4e);
+  background: var(--color-bg-tertiary);
   font-weight: 600;
-  font-size: 13px;
+  font-size: 11px;
   text-transform: uppercase;
-  color: var(--color-text-muted, #888);
+  letter-spacing: 0.06em;
+  color: var(--color-text-dim);
 }
 
 .analyses-table tr:last-child td {
@@ -405,7 +416,7 @@ onMounted(() => {
 }
 
 .analyses-table tr:hover {
-  background: var(--color-bg-hover, rgba(100, 108, 255, 0.05));
+  background: var(--color-bg-hover);
 }
 
 .filename-cell {
@@ -413,9 +424,10 @@ onMounted(() => {
 }
 
 .filename-link {
-  color: var(--color-primary, #646cff);
+  color: var(--color-primary);
   text-decoration: none;
   font-weight: 500;
+  font-size: 13px;
 }
 
 .filename-link:hover {
@@ -423,56 +435,59 @@ onMounted(() => {
 }
 
 .format-badge {
-  background: var(--color-bg-tertiary, #2a2a4e);
-  padding: 4px 10px;
-  border-radius: 4px;
-  font-size: 11px;
+  background: var(--color-bg-tertiary);
+  padding: 3px 8px;
+  border-radius: var(--radius-sm);
+  font-size: 10px;
   text-transform: uppercase;
   font-weight: 600;
+  letter-spacing: 0.04em;
+  color: var(--color-text-muted);
 }
 
-.rate-success { color: var(--color-success, #4caf50); font-weight: 600; }
-.rate-warning { color: var(--color-warning, #ff9800); font-weight: 600; }
-.rate-error { color: var(--color-error, #f44336); font-weight: 600; }
+.rate-success { color: var(--color-success); font-weight: 600; font-variant-numeric: tabular-nums; }
+.rate-warning { color: var(--color-warning); font-weight: 600; font-variant-numeric: tabular-nums; }
+.rate-error { color: var(--color-error); font-weight: 600; font-variant-numeric: tabular-nums; }
 
 .date-cell {
   white-space: nowrap;
-  font-size: 13px;
-  color: var(--color-text-muted, #888);
+  font-size: 12px;
+  color: var(--color-text-dim);
 }
 
 .actions-cell {
   display: flex;
-  gap: 8px;
+  gap: 6px;
 }
 
 .action-btn {
-  padding: 6px 12px;
-  font-size: 12px;
+  padding: 5px 10px;
+  font-size: 11px;
   border: none;
-  border-radius: 4px;
+  border-radius: var(--radius-sm);
   cursor: pointer;
   text-decoration: none;
-  font-weight: 500;
-  transition: all 0.2s ease;
+  font-weight: 600;
+  transition: all var(--transition-fast);
 }
 
 .view-btn {
-  background: var(--color-bg-tertiary, #2a2a4e);
-  color: var(--color-text, #fff);
+  background: var(--color-bg-tertiary);
+  color: var(--color-text);
 }
 
 .view-btn:hover {
-  background: var(--color-primary, #646cff);
+  background: var(--color-primary);
+  color: white;
 }
 
 .delete-btn {
   background: transparent;
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-dim);
 }
 
 .delete-btn:hover {
-  background: var(--color-error, #f44336);
+  background: var(--color-error);
   color: white;
 }
 
@@ -481,31 +496,33 @@ onMounted(() => {
   display: flex;
   justify-content: center;
   align-items: center;
-  gap: 16px;
-  margin-top: 24px;
+  gap: 12px;
+  margin-top: var(--spacing-lg);
 }
 
 .page-btn {
-  padding: 8px 16px;
-  background: var(--color-bg-tertiary, #2a2a4e);
-  border: 1px solid var(--color-border, #3a3a55);
-  border-radius: 6px;
-  color: var(--color-text, #fff);
+  padding: 6px 14px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  color: var(--color-text);
   cursor: pointer;
-  transition: all 0.2s ease;
+  font-size: 13px;
+  transition: all var(--transition-fast);
 }
 
 .page-btn:hover:not(:disabled) {
-  border-color: var(--color-primary, #646cff);
+  border-color: var(--color-primary);
+  background: var(--color-bg-hover);
 }
 
 .page-btn:disabled {
-  opacity: 0.5;
+  opacity: 0.4;
   cursor: not-allowed;
 }
 
 .page-info {
-  font-size: 14px;
-  color: var(--color-text-muted, #888);
+  font-size: 13px;
+  color: var(--color-text-muted);
 }
 </style>
