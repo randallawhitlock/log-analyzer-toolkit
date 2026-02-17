@@ -214,6 +214,7 @@
 import { ref, computed, onMounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
+import DOMPurify from 'dompurify'
 import StatCard from '../components/StatCard.vue'
 import LevelChart from '../components/LevelChart.vue'
 import LiveLogViewer from '../components/LiveLogViewer.vue'
@@ -227,7 +228,7 @@ marked.setOptions({
 
 const renderMarkdown = (text) => {
   if (!text) return ''
-  return marked.parse(text)
+  return DOMPurify.sanitize(marked.parse(text))
 }
 
 const route = useRoute()

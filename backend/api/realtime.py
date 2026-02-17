@@ -5,7 +5,7 @@ Real-time log streaming endpoints using WebSockets and Watchdog.
 import asyncio
 import logging
 import re
-from datetime import datetime
+from datetime import datetime, timezone
 from pathlib import Path
 from typing import Optional
 
@@ -14,8 +14,13 @@ from fastapi import APIRouter, Query, WebSocket, WebSocketDisconnect
 from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
+from backend.constants import UPLOAD_DIRECTORY
+
 router = APIRouter(prefix="/realtime", tags=["realtime"])
 logger = logging.getLogger(__name__)
+
+# Resolve the allowed base directory for file reads
+_ALLOWED_BASE_DIR = Path(UPLOAD_DIRECTORY).resolve()
 
 
 class LogFileEventHandler(FileSystemEventHandler):
@@ -40,6 +45,12 @@ class LogTailer:
     def __init__(self, websocket: WebSocket, file_path: str, filter_regex: Optional[str] = None):
         self.websocket = websocket
         self.file_path = Path(file_path).resolve()
+        # Validate filter regex to prevent ReDoS
+        if filter_regex:
+            try:
+                re.compile(filter_regex)
+            except re.error:
+                filter_regex = None
         self.filter_pattern = re.compile(filter_regex) if filter_regex else None
         self.observer = None
         self._stop_event = asyncio.Event()
@@ -129,7 +140,7 @@ class LogTailer:
             return
 
         try:
-            await self.websocket.send_json({"timestamp": datetime.utcnow().isoformat(), "line": line})
+            await self.websocket.send_json({"timestamp": datetime.now(timezone.utc).isoformat(), "line": line})
         except Exception:
             # Connection likely closed
             self.stop()
@@ -145,10 +156,17 @@ async def websocket_tail_logs(
     WebSocket endpoint for real-time log tailing.
 
     Query Params:
-    - file: Absolute path to the log file
+    - file: Path to log file (must be within the uploads directory)
     - filter: Optional regex pattern to filter lines
     """
     await websocket.accept()
+
+    # Validate that the requested file is within the allowed uploads directory
+    resolved_path = Path(file).resolve()
+    if not str(resolved_path).startswith(str(_ALLOWED_BASE_DIR)):
+        await websocket.send_json({"error": "Access denied: file path is outside the allowed directory"})
+        await websocket.close()
+        return
 
     tailer = LogTailer(websocket, file, filter)
     await tailer.start()
