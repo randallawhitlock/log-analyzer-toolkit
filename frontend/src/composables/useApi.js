@@ -8,6 +8,17 @@ import axios from 'axios'
 
 const API_BASE = import.meta.env.VITE_API_URL || 'http://localhost:8000'
 
+// Create axios instance with default headers
+const apiClient = axios.create({
+    baseURL: API_BASE,
+})
+
+// Attach API key header if configured
+const apiKey = import.meta.env.VITE_API_KEY
+if (apiKey) {
+    apiClient.defaults.headers.common['X-API-Key'] = apiKey
+}
+
 /**
  * Composable for interacting with the Log Analyzer API.
  * @returns {Object} API methods and reactive state
@@ -31,8 +42,8 @@ export function useApi() {
             const formData = new FormData()
             formData.append('file', file)
 
-            const response = await axios.post(
-                `${API_BASE}/api/v1/analyze`,
+            const response = await apiClient.post(
+                '/api/v1/analyze',
                 formData,
                 {
                     headers: { 'Content-Type': 'multipart/form-data' },
@@ -62,7 +73,7 @@ export function useApi() {
             const params = { skip, limit }
             if (format) params.format = format
 
-            const response = await axios.get(`${API_BASE}/api/v1/analyses`, { params })
+            const response = await apiClient.get('/api/v1/analyses', { params })
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message
@@ -82,7 +93,7 @@ export function useApi() {
         error.value = null
 
         try {
-            const response = await axios.get(`${API_BASE}/api/v1/analysis/${id}`)
+            const response = await apiClient.get(`/api/v1/analysis/${id}`)
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message
@@ -102,7 +113,7 @@ export function useApi() {
         error.value = null
 
         try {
-            const response = await axios.delete(`${API_BASE}/api/v1/analysis/${id}`)
+            const response = await apiClient.delete(`/api/v1/analysis/${id}`)
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message
@@ -123,7 +134,7 @@ export function useApi() {
         error.value = null
 
         try {
-            const response = await axios.post(`${API_BASE}/api/v1/triage`, {
+            const response = await apiClient.post('/api/v1/triage', {
                 analysis_id: analysisId,
                 provider
             })
@@ -146,7 +157,7 @@ export function useApi() {
         error.value = null
 
         try {
-            const response = await axios.get(`${API_BASE}/api/v1/triage/${id}`)
+            const response = await apiClient.get(`/api/v1/triage/${id}`)
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message
@@ -166,7 +177,7 @@ export function useApi() {
         error.value = null
 
         try {
-            const response = await axios.get(`${API_BASE}/api/v1/analysis/${analysisId}/triages`)
+            const response = await apiClient.get(`/api/v1/analysis/${analysisId}/triages`)
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message
@@ -182,7 +193,7 @@ export function useApi() {
      */
     const getFormats = async () => {
         try {
-            const response = await axios.get(`${API_BASE}/api/v1/formats`)
+            const response = await apiClient.get('/api/v1/formats')
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message
@@ -196,7 +207,7 @@ export function useApi() {
      */
     const checkHealth = async () => {
         try {
-            const response = await axios.get(`${API_BASE}/health`)
+            const response = await apiClient.get('/health')
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message
@@ -211,7 +222,7 @@ export function useApi() {
      */
     const deepDiveIssue = async (issueData) => {
         try {
-            const response = await axios.post(`${API_BASE}/api/v1/triage/deep-dive`, issueData)
+            const response = await apiClient.post('/api/v1/triage/deep-dive', issueData)
             return response.data
         } catch (err) {
             error.value = err.response?.data?.detail || err.message

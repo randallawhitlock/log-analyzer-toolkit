@@ -11,8 +11,13 @@ RUN pip install --no-cache-dir -e .
 COPY log_analyzer/ ./log_analyzer/
 COPY backend/ ./backend/
 
-# Create uploads directory
-RUN mkdir -p uploads
+# Create uploads directory and non-root user
+RUN mkdir -p uploads && \
+    addgroup --system appgroup && \
+    adduser --system --ingroup appgroup appuser && \
+    chown -R appuser:appgroup /app
+
+USER appuser
 
 EXPOSE 8000
 

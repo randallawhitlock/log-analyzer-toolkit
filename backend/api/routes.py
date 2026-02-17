@@ -7,10 +7,13 @@ Provides REST API endpoints for log analysis and triage.
 import logging
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, UploadFile
+from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
+from slowapi import Limiter
+from slowapi.util import get_remote_address
 from sqlalchemy.orm import Session
 
 from backend.api import schemas
+from backend.api.deps import get_api_key
 from backend.constants import (
     DEFAULT_MAX_ERRORS,
     DEFAULT_PAGE_SIZE,
@@ -28,18 +31,30 @@ from log_analyzer.analyzer import AVAILABLE_PARSERS
 
 logger = logging.getLogger(__name__)
 
+# Stricter rate limit for AI-powered endpoints
+limiter = Limiter(key_func=get_remote_address)
 
-router = APIRouter(prefix="/api/v1", tags=["Log Analysis"])
+router = APIRouter(
+    prefix="/api/v1",
+    tags=["Log Analysis"],
+    dependencies=[Depends(get_api_key)],
+)
 
 
 # ==================== Analysis Endpoints ====================
+
 
 @router.post("/analyze", response_model=schemas.AnalysisResponse, status_code=201)
 async def analyze_log_file(
     file: UploadFile = File(..., description="Log file to analyze"),
     format: str = Query("auto", description="Log format (currently only 'auto' supported)"),
-    max_errors: int = Query(DEFAULT_MAX_ERRORS, ge=MIN_ERRORS_LIMIT, le=MAX_ERRORS_LIMIT, description=f"Maximum errors to collect ({MIN_ERRORS_LIMIT}-{MAX_ERRORS_LIMIT})"),
-    db: Session = Depends(get_db)
+    max_errors: int = Query(
+        DEFAULT_MAX_ERRORS,
+        ge=MIN_ERRORS_LIMIT,
+        le=MAX_ERRORS_LIMIT,
+        description=f"Maximum errors to collect ({MIN_ERRORS_LIMIT}-{MAX_ERRORS_LIMIT})",
+    ),
+    db: Session = Depends(get_db),
 ):
     """
     Upload and analyze a log file.
@@ -56,12 +71,7 @@ async def analyze_log_file(
 
     try:
         service = AnalyzerService()
-        analysis = await service.analyze_uploaded_file(
-            file,
-            db,
-            max_errors=max_errors,
-            log_format=format
-        )
+        analysis = await service.analyze_uploaded_file(file, db, max_errors=max_errors, log_format=format)
         logger.info(f"Analysis created successfully: {analysis.id}")
         return analysis
 
@@ -79,9 +89,14 @@ async def analyze_log_file(
 @router.get("/analyses", response_model=schemas.AnalysisListResponse)
 def list_analyses(
     skip: int = Query(0, ge=0, description="Number of records to skip (offset)"),
-    limit: int = Query(DEFAULT_PAGE_SIZE, ge=MIN_PAGE_SIZE, le=MAX_PAGE_SIZE, description=f"Maximum records to return ({MIN_PAGE_SIZE}-{MAX_PAGE_SIZE})"),
+    limit: int = Query(
+        DEFAULT_PAGE_SIZE,
+        ge=MIN_PAGE_SIZE,
+        le=MAX_PAGE_SIZE,
+        description=f"Maximum records to return ({MIN_PAGE_SIZE}-{MAX_PAGE_SIZE})",
+    ),
     format: Optional[str] = Query(None, description="Filter by log format"),
-    db: Session = Depends(get_db)
+    db: Session = Depends(get_db),
 ):
     """
     List all analyses with pagination.
@@ -102,15 +117,12 @@ def list_analyses(
         total=total,
         page=(skip // limit) + 1,
         per_page=limit,
-        total_pages=(total + limit - 1) // limit
+        total_pages=(total + limit - 1) // limit,
     )
 
 
 @router.get("/analysis/{analysis_id}", response_model=schemas.AnalysisResponse)
-def get_analysis(
-    analysis_id: str,
-    db: Session = Depends(get_db)
-):
+def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
     """
     Get a specific analysis by ID.
 
@@ -127,10 +139,7 @@ def get_analysis(
 
 
 @router.delete("/analysis/{analysis_id}", response_model=schemas.SuccessResponse)
-def delete_analysis(
-    analysis_id: str,
-    db: Session = Depends(get_db)
-):
+def delete_analysis(analysis_id: str, db: Session = Depends(get_db)):
     """
     Delete an analysis and its associated file.
 
@@ -159,11 +168,10 @@ def delete_analysis(
 
 # ==================== Triage Endpoints ====================
 
+
 @router.post("/triage", response_model=schemas.TriageResponse, status_code=201)
-def run_triage(
-    request: schemas.TriageRequest,
-    db: Session = Depends(get_db)
-):
+@limiter.limit("10/minute")
+def run_triage(request: schemas.TriageRequest, fastapi_request: Request, db: Session = Depends(get_db)):
     """
     Run AI-powered triage on an analysis.
 
@@ -180,11 +188,7 @@ def run_triage(
 
     try:
         service = TriageService(provider_name=request.provider)
-        triage = service.run_triage_on_analysis(
-            db,
-            request.analysis_id,
-            provider_name=request.provider
-        )
+        triage = service.run_triage_on_analysis(db, request.analysis_id, provider_name=request.provider)
         logger.info(f"Triage created successfully: {triage.id}")
         return triage
 
@@ -194,8 +198,7 @@ def run_triage(
     except ProviderNotAvailableError as e:
         logger.error(f"AI provider not available: {e}")
         raise HTTPException(
-            status_code=503,
-            detail=f"AI Service Unavailable: {str(e)}. Please configure API keys or start Ollama."
+            status_code=503, detail=f"AI Service Unavailable: {str(e)}. Please configure API keys or start Ollama."
         ) from e
     except Exception as e:
         logger.error(f"Triage failed for analysis {request.analysis_id}: {e}", exc_info=True)
@@ -203,10 +206,8 @@ def run_triage(
 
 
 @router.post("/triage/deep-dive", response_model=schemas.DeepDiveResponse, status_code=200)
-def deep_dive_issue(
-    request: schemas.DeepDiveRequest,
-    db: Session = Depends(get_db)
-):
+@limiter.limit("10/minute")
+def deep_dive_issue(request: schemas.DeepDiveRequest, fastapi_request: Request, db: Session = Depends(get_db)):
     """
     Perform a deep-dive analysis on a specific triage issue.
 
@@ -247,20 +248,14 @@ def deep_dive_issue(
         raise HTTPException(status_code=404, detail=str(e)) from e
     except ProviderNotAvailableError as e:
         logger.error(f"AI provider not available: {e}")
-        raise HTTPException(
-            status_code=503,
-            detail=f"AI Service Unavailable: {str(e)}"
-        ) from e
+        raise HTTPException(status_code=503, detail=f"AI Service Unavailable: {str(e)}") from e
     except Exception as e:
         logger.error(f"Deep dive failed for {request.issue_title}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Deep dive failed: {str(e)}") from e
 
 
 @router.get("/triage/{triage_id}", response_model=schemas.TriageResponse)
-def get_triage(
-    triage_id: str,
-    db: Session = Depends(get_db)
-):
+def get_triage(triage_id: str, db: Session = Depends(get_db)):
     """
     Get a specific triage result by ID.
 
@@ -277,10 +272,7 @@ def get_triage(
 
 
 @router.get("/analysis/{analysis_id}/triages", response_model=list[schemas.TriageResponse])
-def get_triages_for_analysis(
-    analysis_id: str,
-    db: Session = Depends(get_db)
-):
+def get_triages_for_analysis(analysis_id: str, db: Session = Depends(get_db)):
     """
     Get all triages for a specific analysis.
 
@@ -301,6 +293,7 @@ def get_triages_for_analysis(
 
 # ==================== Utility Endpoints ====================
 
+
 @router.get("/formats", response_model=schemas.FormatsResponse)
 def list_formats():
     """
@@ -311,18 +304,9 @@ def list_formats():
     """
     formats = []
     for parser in AVAILABLE_PARSERS:
-        formats.append({
-            "name": parser.name,
-            "description": parser.__class__.__doc__ or f"{parser.name} format parser"
-        })
+        formats.append({"name": parser.name, "description": parser.__class__.__doc__ or f"{parser.name} format parser"})
 
     # Add universal fallback
-    formats.append({
-        "name": "universal",
-        "description": "Universal fallback parser for unknown formats"
-    })
+    formats.append({"name": "universal", "description": "Universal fallback parser for unknown formats"})
 
-    return schemas.FormatsResponse(
-        formats=formats,
-        total=len(formats)
-    )
+    return schemas.FormatsResponse(formats=formats, total=len(formats))
