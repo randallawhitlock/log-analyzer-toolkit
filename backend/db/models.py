@@ -7,7 +7,7 @@ Models:
 """
 
 import uuid
-from datetime import datetime
+from datetime import datetime, timezone
 
 from sqlalchemy import JSON, Column, DateTime, Float, ForeignKey, Integer, String, Text
 from sqlalchemy.orm import relationship
@@ -21,6 +21,7 @@ class Analysis(Base):
 
     Represents the output from LogAnalyzer.analyze(), persisted to database.
     """
+
     __tablename__ = "analyses"
 
     # Primary key
@@ -50,14 +51,10 @@ class Analysis(Base):
     time_span = Column(String, nullable=True)  # Duration as string
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     # Relationships
-    triages = relationship(
-        "Triage",
-        back_populates="analysis",
-        cascade="all, delete-orphan"
-    )
+    triages = relationship("Triage", back_populates="analysis", cascade="all, delete-orphan")
 
     def __repr__(self):
         return f"<Analysis(id={self.id}, filename={self.filename}, format={self.detected_format})>"
@@ -69,18 +66,14 @@ class Triage(Base):
 
     Represents the output from TriageEngine.triage(), linked to an Analysis.
     """
+
     __tablename__ = "triages"
 
     # Primary key
     id = Column(String, primary_key=True, default=lambda: str(uuid.uuid4()))
 
     # Foreign key to analysis
-    analysis_id = Column(
-        String,
-        ForeignKey("analyses.id", ondelete="CASCADE"),
-        nullable=False,
-        index=True
-    )
+    analysis_id = Column(String, ForeignKey("analyses.id", ondelete="CASCADE"), nullable=False, index=True)
 
     # Triage results
     summary = Column(Text, nullable=False)
@@ -96,7 +89,7 @@ class Triage(Base):
     raw_analysis = Column(Text, nullable=True)  # Full raw AI response
 
     # Metadata
-    created_at = Column(DateTime, default=datetime.utcnow, nullable=False, index=True)
+    created_at = Column(DateTime, default=lambda: datetime.now(timezone.utc), nullable=False, index=True)
 
     # Relationships
     analysis = relationship("Analysis", back_populates="triages")

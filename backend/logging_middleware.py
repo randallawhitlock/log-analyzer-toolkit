@@ -17,10 +17,11 @@ logger.setLevel(logging.INFO)
 handler = logging.StreamHandler(sys.stdout)
 formatter = logging.Formatter(
     '{"timestamp": "%(asctime)s", "level": "%(levelname)s", "service": "api", %(message)s}',
-    datefmt='%Y-%m-%dT%H:%M:%S%z'
+    datefmt="%Y-%m-%dT%H:%M:%S%z",
 )
 handler.setFormatter(formatter)
 logger.addHandler(handler)
+
 
 class StructuredLoggingMiddleware(BaseHTTPMiddleware):
     """
@@ -31,17 +32,16 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
         request_id = str(uuid.uuid4())
         start_time = time.time()
 
-        # Add request context
-        {
+        # Request context for logging
+        request_context = {
             "req_id": request_id,
             "method": request.method,
             "path": request.url.path,
             "client_ip": request.client.host if request.client else "unknown",
-            "user_agent": request.headers.get("user-agent", "unknown")
+            "user_agent": request.headers.get("user-agent", "unknown"),
         }
 
-        # Log request (debug level only to avoid noise)
-        # logger.debug(f'"event": "request_received", "context": {str(request_context)}')
+        logger.debug(f'"event": "request_received", "context": {request_context}')
 
         try:
             response = await call_next(request)
@@ -81,4 +81,4 @@ class StructuredLoggingMiddleware(BaseHTTPMiddleware):
                 f'"error": "{str(e)}", '
                 f'"duration_ms": {duration_ms}'
             )
-            raise e
+            raise

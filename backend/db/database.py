@@ -5,8 +5,7 @@ Provides SQLAlchemy engine, session factory, and base model class.
 """
 
 from sqlalchemy import create_engine
-from sqlalchemy.ext.declarative import declarative_base
-from sqlalchemy.orm import sessionmaker
+from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
 # SQLite database URL (will be in root directory for now)
 SQLALCHEMY_DATABASE_URL = "sqlite:///./log_analyzer.db"
@@ -16,14 +15,16 @@ SQLALCHEMY_DATABASE_URL = "sqlite:///./log_analyzer.db"
 engine = create_engine(
     SQLALCHEMY_DATABASE_URL,
     connect_args={"check_same_thread": False},
-    echo=False  # Set to True for SQL query logging
+    echo=False,  # Set to True for SQL query logging
 )
 
 # Create session factory
 SessionLocal = sessionmaker(autocommit=False, autoflush=False, bind=engine)
 
+
 # Create base class for models
-Base = declarative_base()
+class Base(DeclarativeBase):
+    pass
 
 
 def get_db():

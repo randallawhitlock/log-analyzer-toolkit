@@ -4,10 +4,6 @@ CRUD (Create, Read, Update, Delete) operations for database models.
 Provides helper functions for database operations.
 """
 
-
-
-
-
 from typing import Optional
 
 from sqlalchemy import desc
@@ -16,6 +12,7 @@ from sqlalchemy.orm import Session
 from . import models
 
 # ==================== Analysis CRUD ====================
+
 
 def create_analysis(db: Session, analysis_data: dict) -> models.Analysis:
     """
@@ -50,10 +47,7 @@ def get_analysis(db: Session, analysis_id: str) -> Optional[models.Analysis]:
 
 
 def get_analyses(
-    db: Session,
-    skip: int = 0,
-    limit: int = 100,
-    format_filter: Optional[str] = None
+    db: Session, skip: int = 0, limit: int = 100, format_filter: Optional[str] = None
 ) -> list[models.Analysis]:
     """
     Get list of analyses with pagination and optional filtering.
@@ -114,6 +108,7 @@ def delete_analysis(db: Session, analysis_id: str) -> bool:
 
 
 # ==================== Triage CRUD ====================
+
 
 def create_triage(db: Session, triage_data: dict) -> models.Triage:
     """
