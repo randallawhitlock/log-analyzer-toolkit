@@ -77,6 +77,14 @@ class AnalysisListResponse(BaseModel):
     total_pages: int
 
 
+class LogPreviewResponse(BaseModel):
+    """Schema for log file preview response."""
+
+    analysis_id: str
+    lines: list[str]
+    total_lines_returned: int
+
+
 # ==================== Triage Schemas ====================
 
 

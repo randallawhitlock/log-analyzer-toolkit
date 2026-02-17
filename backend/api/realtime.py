@@ -15,6 +15,8 @@ from watchdog.events import FileSystemEventHandler
 from watchdog.observers import Observer
 
 from backend.constants import UPLOAD_DIRECTORY
+from backend.db import crud
+from backend.db.database import SessionLocal
 
 router = APIRouter(prefix="/realtime", tags=["realtime"])
 logger = logging.getLogger(__name__)
@@ -149,24 +151,38 @@ class LogTailer:
 @router.websocket("/ws/logs/tail")
 async def websocket_tail_logs(
     websocket: WebSocket,
-    file: str = Query(..., description="Path to log file"),
+    analysis_id: str = Query(..., description="Analysis UUID to tail"),
     filter: Optional[str] = Query(None, description="Regex filter"),
 ):
     """
     WebSocket endpoint for real-time log tailing.
 
     Query Params:
-    - file: Path to log file (must be within the uploads directory)
+    - analysis_id: UUID of the analysis (resolves file path via DB)
     - filter: Optional regex pattern to filter lines
     """
     await websocket.accept()
 
-    # Validate that the requested file is within the allowed uploads directory
-    resolved_path = Path(file).resolve()
+    # Resolve file path from analysis ID via database lookup
+    db = SessionLocal()
+    try:
+        analysis = crud.get_analysis(db, analysis_id)
+    finally:
+        db.close()
+
+    if not analysis:
+        await websocket.send_json({"error": f"Analysis {analysis_id} not found"})
+        await websocket.close()
+        return
+
+    file_path = analysis.file_path
+
+    # Validate that the resolved file is within the allowed uploads directory
+    resolved_path = Path(file_path).resolve()
     if not str(resolved_path).startswith(str(_ALLOWED_BASE_DIR)):
         await websocket.send_json({"error": "Access denied: file path is outside the allowed directory"})
         await websocket.close()
         return
 
-    tailer = LogTailer(websocket, file, filter)
+    tailer = LogTailer(websocket, file_path, filter)
     await tailer.start()

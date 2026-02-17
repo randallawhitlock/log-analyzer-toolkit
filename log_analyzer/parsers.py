@@ -56,6 +56,7 @@ class LogEntry:
         source: Source of the log (IP, hostname, etc.)
         metadata: Additional parsed fields
     """
+
     raw: str = ""
     timestamp: Optional[datetime] = None
     level: Optional[str] = None
@@ -70,24 +71,24 @@ class LogEntry:
 
 # Cloud provider severity mapping
 GCP_SEVERITY_MAP = {
-    'DEFAULT': 'INFO',
-    'DEBUG': 'DEBUG',
-    'INFO': 'INFO',
-    'NOTICE': 'INFO',
-    'WARNING': 'WARNING',
-    'ERROR': 'ERROR',
-    'CRITICAL': 'CRITICAL',
-    'ALERT': 'CRITICAL',
-    'EMERGENCY': 'CRITICAL',
+    "DEFAULT": "INFO",
+    "DEBUG": "DEBUG",
+    "INFO": "INFO",
+    "NOTICE": "INFO",
+    "WARNING": "WARNING",
+    "ERROR": "ERROR",
+    "CRITICAL": "CRITICAL",
+    "ALERT": "CRITICAL",
+    "EMERGENCY": "CRITICAL",
 }
 
 # Azure severity level mapping (numeric)
 AZURE_SEVERITY_MAP = {
-    0: 'DEBUG',    # Verbose
-    1: 'INFO',     # Information
-    2: 'WARNING',  # Warning
-    3: 'ERROR',    # Error
-    4: 'CRITICAL', # Critical
+    0: "DEBUG",  # Verbose
+    1: "INFO",  # Information
+    2: "WARNING",  # Warning
+    3: "ERROR",  # Error
+    4: "CRITICAL",  # Critical
 }
 
 
@@ -117,12 +118,12 @@ def parse_cloud_timestamp(timestamp_str: str) -> Optional[datetime]:
             pass
 
     # Handle RFC3339Nano (nanoseconds) - truncate to microseconds
-    if '.' in timestamp_str and 'Z' in timestamp_str:
+    if "." in timestamp_str and "Z" in timestamp_str:
         try:
             # Split into date-time and fractional seconds
-            parts = timestamp_str.split('.')
+            parts = timestamp_str.split(".")
             if len(parts) == 2:
-                fractional = parts[1].rstrip('Z')
+                fractional = parts[1].rstrip("Z")
                 # Truncate to 6 digits (microseconds) if longer
                 if len(fractional) > 6:
                     fractional = fractional[:6]
@@ -133,9 +134,9 @@ def parse_cloud_timestamp(timestamp_str: str) -> Optional[datetime]:
 
     # Try ISO8601/RFC3339 formats
     formats = [
-        '%Y-%m-%dT%H:%M:%SZ',
-        '%Y-%m-%dT%H:%M:%S.%fZ',
-        '%Y-%m-%dT%H:%M:%S%z',
+        "%Y-%m-%dT%H:%M:%SZ",
+        "%Y-%m-%dT%H:%M:%S.%fZ",
+        "%Y-%m-%dT%H:%M:%S%z",
     ]
 
     for fmt in formats:
@@ -167,22 +168,22 @@ def extract_level_from_message(message: str) -> Optional[str]:
     message_upper = message.upper()
 
     # Check for common level indicators
-    if any(indicator in message_upper for indicator in ['FATAL', 'CRITICAL', 'CRIT']):
-        return 'CRITICAL'
-    if 'ERROR' in message_upper or 'ERR' in message_upper:
-        return 'ERROR'
-    if any(indicator in message_upper for indicator in ['WARN', 'WARNING']):
-        return 'WARNING'
-    if 'INFO' in message_upper:
-        return 'INFO'
-    if 'DEBUG' in message_upper:
-        return 'DEBUG'
+    if any(indicator in message_upper for indicator in ["FATAL", "CRITICAL", "CRIT"]):
+        return "CRITICAL"
+    if "ERROR" in message_upper or "ERR" in message_upper:
+        return "ERROR"
+    if any(indicator in message_upper for indicator in ["WARN", "WARNING"]):
+        return "WARNING"
+    if "INFO" in message_upper:
+        return "INFO"
+    if "DEBUG" in message_upper:
+        return "DEBUG"
 
     # Check for bracketed levels like [ERROR] or [INFO]
-    level_match = re.search(r'\[(CRITICAL|ERROR|WARN|WARNING|INFO|DEBUG)\]', message_upper)
+    level_match = re.search(r"\[(CRITICAL|ERROR|WARN|WARNING|INFO|DEBUG)\]", message_upper)
     if level_match:
         level = level_match.group(1)
-        return 'WARNING' if level == 'WARN' else level
+        return "WARNING" if level == "WARN" else level
 
     return None
 
@@ -223,6 +224,7 @@ class BaseParser(ABC):
 # Cloud Provider Parsers
 # ============================================================================
 
+
 class AWSCloudWatchParser(BaseParser):
     """
     Parser for AWS CloudWatch Logs format.
@@ -240,13 +242,13 @@ class AWSCloudWatchParser(BaseParser):
     name = "aws_cloudwatch"
 
     # JSON keys that identify CloudWatch logs
-    JSON_KEYS = {'logEvents', 'logGroup', 'logStream'}
+    JSON_KEYS = {"logEvents", "logGroup", "logStream"}
 
     # Plain text pattern for CloudWatch exports
     PATTERN = re.compile(
-        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+'
-        r'(?:\[(?P<level>\w+)\]\s+)?'
-        r'(?P<message>.+)$'
+        r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d{3}Z)\s+"
+        r"(?:\[(?P<level>\w+)\]\s+)?"
+        r"(?P<message>.+)$"
     )
 
     def can_parse(self, line: str) -> bool:
@@ -254,7 +256,7 @@ class AWSCloudWatchParser(BaseParser):
         line = line.strip()
 
         # Try JSON format first
-        if line.startswith('{'):
+        if line.startswith("{"):
             try:
                 data = json.loads(line)
                 return any(key in data for key in self.JSON_KEYS)
@@ -269,19 +271,17 @@ class AWSCloudWatchParser(BaseParser):
         line = line.strip()
 
         # Try JSON format first
-        if line.startswith('{'):
+        if line.startswith("{"):
             try:
                 data = json.loads(line)
-                if 'logEvents' in data:
+                if "logEvents" in data:
                     # Batch format - parse first event
-                    events = data.get('logEvents', [])
+                    events = data.get("logEvents", [])
                     if events:
                         return self._parse_event(
-                            events[0],
-                            log_group=data.get('logGroup'),
-                            log_stream=data.get('logStream')
+                            events[0], log_group=data.get("logGroup"), log_stream=data.get("logStream")
                         )
-                elif 'message' in data:
+                elif "message" in data:
                     # Single event format
                     return self._parse_event(data)
             except (json.JSONDecodeError, ValueError, KeyError):
@@ -291,23 +291,23 @@ class AWSCloudWatchParser(BaseParser):
         match = self.PATTERN.match(line)
         if match:
             data = match.groupdict()
-            timestamp = parse_cloud_timestamp(data['timestamp'])
-            level = data.get('level') or extract_level_from_message(data['message'])
+            timestamp = parse_cloud_timestamp(data["timestamp"])
+            level = data.get("level") or extract_level_from_message(data["message"])
 
             return LogEntry(
                 raw=line,
                 timestamp=timestamp,
-                level=level.upper() if level else 'INFO',
-                message=data['message'],
-                metadata={'parser_type': 'aws_cloudwatch_text'}
+                level=level.upper() if level else "INFO",
+                message=data["message"],
+                metadata={"parser_type": "aws_cloudwatch_text"},
             )
 
         return None
 
     def _parse_event(self, event: dict, log_group=None, log_stream=None) -> Optional[LogEntry]:
         """Parse CloudWatch event object."""
-        message = event.get('message', '')
-        timestamp_ms = event.get('timestamp')
+        message = event.get("message", "")
+        timestamp_ms = event.get("timestamp")
 
         # Parse timestamp (Unix milliseconds)
         timestamp = None
@@ -315,27 +315,21 @@ class AWSCloudWatchParser(BaseParser):
             timestamp = parse_cloud_timestamp(str(timestamp_ms))
 
         # Extract level from message
-        level = extract_level_from_message(message) or 'INFO'
+        level = extract_level_from_message(message) or "INFO"
 
         # Build metadata
-        metadata = {'parser_type': 'aws_cloudwatch_json'}
+        metadata = {"parser_type": "aws_cloudwatch_json"}
         if log_group:
-            metadata['log_group'] = log_group
+            metadata["log_group"] = log_group
         if log_stream:
-            metadata['log_stream'] = log_stream
+            metadata["log_stream"] = log_stream
 
         # Extract request ID if present (Lambda format)
-        request_id_match = re.search(r'([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})', message)
+        request_id_match = re.search(r"([0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12})", message)
         if request_id_match:
-            metadata['request_id'] = request_id_match.group(1)
+            metadata["request_id"] = request_id_match.group(1)
 
-        return LogEntry(
-            timestamp=timestamp,
-            level=level,
-            message=message.strip(),
-            source=log_group,
-            metadata=metadata
-        )
+        return LogEntry(timestamp=timestamp, level=level, message=message.strip(), source=log_group, metadata=metadata)
 
 
 class GCPCloudLoggingParser(BaseParser):
@@ -353,12 +347,12 @@ class GCPCloudLoggingParser(BaseParser):
     name = "gcp_logging"
 
     # Required/identifying fields for GCP logs
-    GCP_KEYS = {'severity', 'timestamp'}
+    GCP_KEYS = {"severity", "timestamp"}
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches GCP Cloud Logging format."""
         line = line.strip()
-        if not line.startswith('{'):
+        if not line.startswith("{"):
             return False
 
         try:
@@ -376,71 +370,71 @@ class GCPCloudLoggingParser(BaseParser):
             return None
 
         # Validate required fields (must have both severity and timestamp)
-        if 'severity' not in data or 'timestamp' not in data:
+        if "severity" not in data or "timestamp" not in data:
             return None
 
         # Extract timestamp
-        timestamp_str = data.get('timestamp')
+        timestamp_str = data.get("timestamp")
         timestamp = parse_cloud_timestamp(timestamp_str) if timestamp_str else None
 
         # Extract severity and map to standard levels
-        severity = data.get('severity', 'INFO').upper()
+        severity = data.get("severity", "INFO").upper()
         level = GCP_SEVERITY_MAP.get(severity, severity)
 
         # Extract message from textPayload or jsonPayload
-        message = ''
-        if 'textPayload' in data:
-            message = data['textPayload']
-        elif 'jsonPayload' in data:
-            payload = data['jsonPayload']
+        message = ""
+        if "textPayload" in data:
+            message = data["textPayload"]
+        elif "jsonPayload" in data:
+            payload = data["jsonPayload"]
             # Try to get 'message' or 'msg' field, or serialize the whole payload
             if isinstance(payload, dict):
-                message = payload.get('message') or payload.get('msg') or json.dumps(payload)
+                message = payload.get("message") or payload.get("msg") or json.dumps(payload)
             else:
                 message = str(payload)
 
         # Extract source from resource.type
         source = None
-        resource = data.get('resource', {})
+        resource = data.get("resource", {})
         if isinstance(resource, dict):
-            source = resource.get('type')
+            source = resource.get("type")
 
         # Build metadata
-        metadata = {'parser_type': 'gcp_logging'}
+        metadata = {"parser_type": "gcp_logging"}
 
         # Add resource labels
-        if isinstance(resource, dict) and 'labels' in resource:
-            resource_labels = resource['labels']
+        if isinstance(resource, dict) and "labels" in resource:
+            resource_labels = resource["labels"]
             if isinstance(resource_labels, dict):
-                metadata['resource_labels'] = resource_labels
+                metadata["resource_labels"] = resource_labels
                 # Extract common fields
-                if 'pod_name' in resource_labels:
-                    metadata['pod_name'] = resource_labels['pod_name']
-                if 'namespace_name' in resource_labels:
-                    metadata['namespace'] = resource_labels['namespace_name']
-                if 'instance_id' in resource_labels:
-                    metadata['instance_id'] = resource_labels['instance_id']
+                if "pod_name" in resource_labels:
+                    metadata["pod_name"] = resource_labels["pod_name"]
+                if "namespace_name" in resource_labels:
+                    metadata["namespace"] = resource_labels["namespace_name"]
+                if "instance_id" in resource_labels:
+                    metadata["instance_id"] = resource_labels["instance_id"]
 
         # Add log-level labels
-        if 'labels' in data and isinstance(data['labels'], dict):
-            metadata['labels'] = data['labels']
+        if "labels" in data and isinstance(data["labels"], dict):
+            metadata["labels"] = data["labels"]
 
         # Add logName
-        if 'logName' in data:
-            metadata['log_name'] = data['logName']
+        if "logName" in data:
+            metadata["log_name"] = data["logName"]
 
         # Add trace/span IDs if present
-        if 'trace' in data:
-            metadata['trace'] = data['trace']
-        if 'spanId' in data:
-            metadata['span_id'] = data['spanId']
+        if "trace" in data:
+            metadata["trace"] = data["trace"]
+        if "spanId" in data:
+            metadata["span_id"] = data["spanId"]
 
         return LogEntry(
             timestamp=timestamp,
             level=level,
-            message=message.strip() if message else '',
+            message=message.strip() if message else "",
             source=source,
-            metadata=metadata
+            metadata=metadata,
         )
 
 
@@ -461,15 +455,15 @@ class AzureMonitorParser(BaseParser):
     name = "azure_monitor"
 
     # Identifying field combinations
-    TIME_FIELDS = {'time', 'TimeGenerated'}
-    LEVEL_FIELDS = {'level', 'SeverityLevel'}
+    TIME_FIELDS = {"time", "TimeGenerated"}
+    LEVEL_FIELDS = {"level", "SeverityLevel"}
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches Azure Monitor format."""
         line = line.strip()
 
         # Handle JSON array format
-        if line.startswith('['):
+        if line.startswith("["):
             try:
                 data = json.loads(line)
                 if isinstance(data, list) and data:
@@ -480,7 +474,7 @@ class AzureMonitorParser(BaseParser):
                 return False
 
         # Handle single JSON object
-        if line.startswith('{'):
+        if line.startswith("{"):
             try:
                 data = json.loads(line)
                 return self._has_azure_fields(data)
@@ -503,7 +497,7 @@ class AzureMonitorParser(BaseParser):
         line = line.strip()
 
         # Handle JSON array (take first element)
-        if line.startswith('['):
+        if line.startswith("["):
             try:
                 data = json.loads(line)
                 if isinstance(data, list) and data:
@@ -512,7 +506,7 @@ class AzureMonitorParser(BaseParser):
                 return None
 
         # Handle single JSON object
-        if line.startswith('{'):
+        if line.startswith("{"):
             try:
                 data = json.loads(line)
                 return self._parse_entry(data)
@@ -527,67 +521,68 @@ class AzureMonitorParser(BaseParser):
             return None
 
         # Extract timestamp (try both field names)
-        timestamp_str = data.get('time') or data.get('TimeGenerated')
+        timestamp_str = data.get("time") or data.get("TimeGenerated")
         timestamp = parse_cloud_timestamp(timestamp_str) if timestamp_str else None
 
         # Extract level (string or numeric)
-        level = 'INFO'
-        if 'level' in data:
+        level = "INFO"
+        if "level" in data:
             # String level (Application Insights)
-            level_str = data['level']
+            level_str = data["level"]
             if isinstance(level_str, str):
                 level_upper = level_str.upper()
-                if level_upper == 'ERROR':
-                    level = 'ERROR'
-                elif level_upper in ('WARN', 'WARNING'):
-                    level = 'WARNING'
-                elif level_upper in ('INFO', 'INFORMATION'):
-                    level = 'INFO'
-                elif level_upper in ('CRITICAL', 'FATAL'):
-                    level = 'CRITICAL'
-                elif level_upper == 'DEBUG' or level_upper == 'VERBOSE':
-                    level = 'DEBUG'
-        elif 'SeverityLevel' in data:
+                if level_upper == "ERROR":
+                    level = "ERROR"
+                elif level_upper in ("WARN", "WARNING"):
+                    level = "WARNING"
+                elif level_upper in ("INFO", "INFORMATION"):
+                    level = "INFO"
+                elif level_upper in ("CRITICAL", "FATAL"):
+                    level = "CRITICAL"
+                elif level_upper == "DEBUG" or level_upper == "VERBOSE":
+                    level = "DEBUG"
+        elif "SeverityLevel" in data:
             # Numeric level (Log Analytics)
-            severity_num = data['SeverityLevel']
+            severity_num = data["SeverityLevel"]
             if isinstance(severity_num, int):
-                level = AZURE_SEVERITY_MAP.get(severity_num, 'INFO')
+                level = AZURE_SEVERITY_MAP.get(severity_num, "INFO")
 
         # Extract message (try different field names)
-        message = data.get('message') or data.get('Message') or ''
+        message = data.get("message") or data.get("Message") or ""
 
         # Extract source (Computer field or category)
-        source = data.get('Computer') or data.get('category')
+        source = data.get("Computer") or data.get("category")
 
         # Build metadata
-        metadata = {'parser_type': 'azure_monitor'}
+        metadata = {"parser_type": "azure_monitor"}
 
         # Add operation name if present
-        if 'operationName' in data:
-            metadata['operation'] = data['operationName']
+        if "operationName" in data:
+            metadata["operation"] = data["operationName"]
 
         # Add category
-        if 'category' in data:
-            metadata['category'] = data['category']
+        if "category" in data:
+            metadata["category"] = data["category"]
 
         # Add properties/AdditionalContext
-        if 'properties' in data and isinstance(data['properties'], dict):
-            metadata['properties'] = data['properties']
-        if 'AdditionalContext' in data and isinstance(data['AdditionalContext'], dict):
-            metadata['additional_context'] = data['AdditionalContext']
+        if "properties" in data and isinstance(data["properties"], dict):
+            metadata["properties"] = data["properties"]
+        if "AdditionalContext" in data and isinstance(data["AdditionalContext"], dict):
+            metadata["additional_context"] = data["AdditionalContext"]
 
         return LogEntry(
             timestamp=timestamp,
             level=level,
-            message=message.strip() if message else '',
+            message=message.strip() if message else "",
             source=source,
-            metadata=metadata
+            metadata=metadata,
         )
 
 
 # ============================================================================
 # Container Runtime Parsers
 # ============================================================================
+
 
 class DockerJSONParser(BaseParser):
     """
@@ -602,12 +597,12 @@ class DockerJSONParser(BaseParser):
     name = "docker_json"
 
     # Required fields for Docker JSON logs
-    DOCKER_KEYS = {'log', 'stream', 'time'}
+    DOCKER_KEYS = {"log", "stream", "time"}
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches Docker JSON log format."""
         line = line.strip()
-        if not line.startswith('{'):
+        if not line.startswith("{"):
             return False
 
         try:
@@ -624,9 +619,9 @@ class DockerJSONParser(BaseParser):
             return None
 
         # Extract fields
-        log_message = data.get('log', '').rstrip('\n')
-        stream = data.get('stream', 'stdout')
-        time_str = data.get('time')
+        log_message = data.get("log", "").rstrip("\n")
+        stream = data.get("stream", "stdout")
+        time_str = data.get("time")
 
         # Parse timestamp
         timestamp = parse_cloud_timestamp(time_str) if time_str else None
@@ -636,21 +631,12 @@ class DockerJSONParser(BaseParser):
 
         # Default level based on stream if not found in message
         if not level:
-            level = 'WARNING' if stream == 'stderr' else 'INFO'
+            level = "WARNING" if stream == "stderr" else "INFO"
 
         # Build metadata
-        metadata = {
-            'parser_type': 'docker_json',
-            'stream': stream
-        }
+        metadata = {"parser_type": "docker_json", "stream": stream}
 
-        return LogEntry(
-            timestamp=timestamp,
-            level=level,
-            message=log_message,
-            source=stream,
-            metadata=metadata
-        )
+        return LogEntry(timestamp=timestamp, level=level, message=log_message, source=stream, metadata=metadata)
 
 
 class KubernetesParser(BaseParser):
@@ -670,10 +656,10 @@ class KubernetesParser(BaseParser):
 
     # CRI format pattern
     CRI_PATTERN = re.compile(
-        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+'
-        r'(?P<stream>stdout|stderr)\s+'
-        r'(?P<flag>[FP])\s+'
-        r'(?P<message>.*)$'
+        r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+"
+        r"(?P<stream>stdout|stderr)\s+"
+        r"(?P<flag>[FP])\s+"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
@@ -685,11 +671,11 @@ class KubernetesParser(BaseParser):
             return True
 
         # Try Docker JSON format (also used by Kubernetes)
-        if line.startswith('{'):
+        if line.startswith("{"):
             try:
                 data = json.loads(line)
                 # Must have log, stream, and time fields
-                return all(key in data for key in ['log', 'stream', 'time'])
+                return all(key in data for key in ["log", "stream", "time"])
             except (json.JSONDecodeError, ValueError):
                 return False
 
@@ -704,58 +690,45 @@ class KubernetesParser(BaseParser):
         if match:
             data = match.groupdict()
 
-            timestamp = parse_cloud_timestamp(data['timestamp'])
-            stream = data['stream']
-            flag = data['flag']
-            message = data['message']
+            timestamp = parse_cloud_timestamp(data["timestamp"])
+            stream = data["stream"]
+            flag = data["flag"]
+            message = data["message"]
 
             # Extract level from message
             level = extract_level_from_message(message)
 
             # Default based on stream if not found
             if not level:
-                level = 'WARNING' if stream == 'stderr' else 'INFO'
+                level = "WARNING" if stream == "stderr" else "INFO"
 
             metadata = {
-                'parser_type': 'kubernetes_cri',
-                'stream': stream,
-                'flag': flag,  # F=full, P=partial
+                "parser_type": "kubernetes_cri",
+                "stream": stream,
+                "flag": flag,  # F=full, P=partial
             }
 
-            return LogEntry(
-                timestamp=timestamp,
-                level=level,
-                message=message,
-                source=stream,
-                metadata=metadata
-            )
+            return LogEntry(timestamp=timestamp, level=level, message=message, source=stream, metadata=metadata)
 
         # Try Docker JSON format
-        if line.startswith('{'):
+        if line.startswith("{"):
             try:
                 data = json.loads(line)
-                if all(key in data for key in ['log', 'stream', 'time']):
-                    log_message = data['log'].rstrip('\n')
-                    stream = data['stream']
-                    time_str = data['time']
+                if all(key in data for key in ["log", "stream", "time"]):
+                    log_message = data["log"].rstrip("\n")
+                    stream = data["stream"]
+                    time_str = data["time"]
 
                     timestamp = parse_cloud_timestamp(time_str)
                     level = extract_level_from_message(log_message)
 
                     if not level:
-                        level = 'WARNING' if stream == 'stderr' else 'INFO'
+                        level = "WARNING" if stream == "stderr" else "INFO"
 
-                    metadata = {
-                        'parser_type': 'kubernetes_json',
-                        'stream': stream
-                    }
+                    metadata = {"parser_type": "kubernetes_json", "stream": stream}
 
                     return LogEntry(
-                        timestamp=timestamp,
-                        level=level,
-                        message=log_message,
-                        source=stream,
-                        metadata=metadata
+                        timestamp=timestamp, level=level, message=log_message, source=stream, metadata=metadata
                     )
             except (json.JSONDecodeError, ValueError):
                 pass
@@ -778,10 +751,10 @@ class ContainerdParser(BaseParser):
 
     # CRI format pattern (same as Kubernetes, but containerd-specific)
     CRI_PATTERN = re.compile(
-        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+'
-        r'(?P<stream>stdout|stderr)\s+'
-        r'(?P<flag>[FP])\s+'
-        r'(?P<message>.*)$'
+        r"^(?P<timestamp>\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}\.\d+Z)\s+"
+        r"(?P<stream>stdout|stderr)\s+"
+        r"(?P<flag>[FP])\s+"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
@@ -793,19 +766,19 @@ class ContainerdParser(BaseParser):
         if match:
             # This is CRI format - could be containerd or kubernetes
             # Containerd logs often have JSON payloads or [INFO] style messages
-            message = match.group('message')
+            message = match.group("message")
             # Heuristic: if message looks like structured JSON or has component field,
             # likely containerd. Otherwise, might be generic CRI.
-            if message.strip().startswith('{'):
+            if message.strip().startswith("{"):
                 try:
                     data = json.loads(message.strip())
                     # Common containerd JSON fields
-                    if any(k in data for k in ['component', 'level', 'msg']):
+                    if any(k in data for k in ["component", "level", "msg"]):
                         return True
                 except (json.JSONDecodeError, ValueError):
                     pass
             # Also match if it has [INFO] style prefix or specific patterns
-            if '[INFO]' in message or 'plugin/' in message or 'component' in message:
+            if "[INFO]" in message or "plugin/" in message or "component" in message:
                 return True
 
         return False
@@ -819,41 +792,41 @@ class ContainerdParser(BaseParser):
             return None
 
         data = match.groupdict()
-        timestamp = parse_cloud_timestamp(data['timestamp'])
-        stream = data['stream']
-        flag = data['flag']
-        message = data['message']
+        timestamp = parse_cloud_timestamp(data["timestamp"])
+        stream = data["stream"]
+        flag = data["flag"]
+        message = data["message"]
 
         level = None
         source = None
         metadata = {
-            'parser_type': 'containerd_cri',
-            'stream': stream,
-            'flag': flag,
+            "parser_type": "containerd_cri",
+            "stream": stream,
+            "flag": flag,
         }
 
         # Try to parse message as JSON
-        if message.strip().startswith('{'):
+        if message.strip().startswith("{"):
             try:
                 json_msg = json.loads(message.strip())
                 if isinstance(json_msg, dict):
                     # Extract level from JSON
-                    if 'level' in json_msg:
-                        level_str = json_msg['level'].upper()
-                        if level_str in ['INFO', 'DEBUG', 'WARN', 'WARNING', 'ERROR', 'CRITICAL']:
-                            level = 'WARNING' if level_str == 'WARN' else level_str
+                    if "level" in json_msg:
+                        level_str = json_msg["level"].upper()
+                        if level_str in ["INFO", "DEBUG", "WARN", "WARNING", "ERROR", "CRITICAL"]:
+                            level = "WARNING" if level_str == "WARN" else level_str
 
                     # Extract component as source
-                    if 'component' in json_msg:
-                        source = json_msg['component']
-                        metadata['component'] = json_msg['component']
+                    if "component" in json_msg:
+                        source = json_msg["component"]
+                        metadata["component"] = json_msg["component"]
 
                     # Use 'msg' field as message if present
-                    if 'msg' in json_msg:
-                        message = json_msg['msg']
+                    if "msg" in json_msg:
+                        message = json_msg["msg"]
 
                     # Store full JSON in metadata
-                    metadata['json_data'] = json_msg
+                    metadata["json_data"] = json_msg
             except (json.JSONDecodeError, ValueError):
                 pass
 
@@ -863,14 +836,10 @@ class ContainerdParser(BaseParser):
 
         # Default level based on stream if still not found
         if not level:
-            level = 'WARNING' if stream == 'stderr' else 'INFO'
+            level = "WARNING" if stream == "stderr" else "INFO"
 
         return LogEntry(
-            timestamp=timestamp,
-            level=level,
-            message=message.strip(),
-            source=source or stream,
-            metadata=metadata
+            timestamp=timestamp, level=level, message=message.strip(), source=source or stream, metadata=metadata
         )
 
 
@@ -886,15 +855,15 @@ class ApacheAccessParser(BaseParser):
 
     # Regex pattern for Apache Combined Log Format
     PATTERN = re.compile(
-        r'^(?P<ip>[\d.]+)\s+'           # IP address
-        r'(?P<ident>\S+)\s+'             # Ident
-        r'(?P<user>\S+)\s+'              # User
-        r'\[(?P<timestamp>[^\]]+)\]\s+'  # Timestamp
-        r'"(?P<request>[^"]*)"\s+'       # Request
-        r'(?P<status>\d+)\s+'            # Status code
-        r'(?P<size>\S+)'                 # Size
-        r'(?:\s+"(?P<referer>[^"]*)"\s+' # Referer (optional)
-        r'"(?P<user_agent>[^"]*)")?'     # User Agent (optional)
+        r"^(?P<ip>[\d.]+)\s+"  # IP address
+        r"(?P<ident>\S+)\s+"  # Ident
+        r"(?P<user>\S+)\s+"  # User
+        r"\[(?P<timestamp>[^\]]+)\]\s+"  # Timestamp
+        r'"(?P<request>[^"]*)"\s+'  # Request
+        r"(?P<status>\d+)\s+"  # Status code
+        r"(?P<size>\S+)"  # Size
+        r'(?:\s+"(?P<referer>[^"]*)"\s+'  # Referer (optional)
+        r'"(?P<user_agent>[^"]*)")?'  # User Agent (optional)
     )
 
     def can_parse(self, line: str) -> bool:
@@ -912,32 +881,27 @@ class ApacheAccessParser(BaseParser):
         # Parse timestamp
         timestamp = None
         with contextlib.suppress(ValueError, TypeError):
-            timestamp = datetime.strptime(
-                data['timestamp'],
-                '%d/%b/%Y:%H:%M:%S %z'
-            )
+            timestamp = datetime.strptime(data["timestamp"], "%d/%b/%Y:%H:%M:%S %z")
 
         # Determine level based on status code
-        status = int(data.get('status', 0))
-        if status >= 500:
-            level = 'ERROR'
-        elif status >= 400:
-            level = 'WARNING'
+        status = int(data.get("status", 0))
+        if status >= 500 or status >= 400:
+            level = "ERROR"
         else:
-            level = 'INFO'
+            level = "INFO"
 
         return LogEntry(
             timestamp=timestamp,
             level=level,
-            message=data.get('request', ''),
-            source=data.get('ip'),
+            message=data.get("request", ""),
+            source=data.get("ip"),
             metadata={
-                'status': status,
-                'size': data.get('size'),
-                'user': data.get('user'),
-                'referer': data.get('referer'),
-                'user_agent': data.get('user_agent'),
-            }
+                "status": status,
+                "size": data.get("size"),
+                "user": data.get("user"),
+                "referer": data.get("referer"),
+                "user_agent": data.get("user_agent"),
+            },
         )
 
 
@@ -953,29 +917,29 @@ class ApacheErrorParser(BaseParser):
 
     # Modern format with module:level
     PATTERN = re.compile(
-        r'^\[(?P<timestamp>[^\]]+)\]\s+'     # Timestamp
-        r'\[(?P<module>\w+):(?P<level>\w+)\]\s+'  # Module:Level
-        r'(?:\[pid\s+(?P<pid>\d+)\]\s+)?'    # PID (optional)
-        r'(?:\[client\s+(?P<client>[^\]]+)\]\s+)?'  # Client (optional)
-        r'(?P<message>.+)$'                   # Message
+        r"^\[(?P<timestamp>[^\]]+)\]\s+"  # Timestamp
+        r"\[(?P<module>\w+):(?P<level>\w+)\]\s+"  # Module:Level
+        r"(?:\[pid\s+(?P<pid>\d+)\]\s+)?"  # PID (optional)
+        r"(?:\[client\s+(?P<client>[^\]]+)\]\s+)?"  # Client (optional)
+        r"(?P<message>.+)$"  # Message
     )
 
     # Legacy format with just level (no module)
     PATTERN_LEGACY = re.compile(
-        r'^\[(?P<timestamp>[^\]]+)\]\s+'     # Timestamp
-        r'\[(?P<level>\w+)\]\s+'             # Level only
-        r'(?P<message>.+)$'                   # Message
+        r"^\[(?P<timestamp>[^\]]+)\]\s+"  # Timestamp
+        r"\[(?P<level>\w+)\]\s+"  # Level only
+        r"(?P<message>.+)$"  # Message
     )
 
     LEVEL_MAP = {
-        'emerg': 'CRITICAL',
-        'alert': 'CRITICAL',
-        'crit': 'CRITICAL',
-        'error': 'ERROR',
-        'warn': 'WARNING',
-        'notice': 'INFO',
-        'info': 'INFO',
-        'debug': 'DEBUG',
+        "emerg": "CRITICAL",
+        "alert": "CRITICAL",
+        "crit": "CRITICAL",
+        "error": "ERROR",
+        "warn": "WARNING",
+        "notice": "INFO",
+        "info": "INFO",
+        "debug": "DEBUG",
     }
 
     def can_parse(self, line: str) -> bool:
@@ -988,32 +952,26 @@ class ApacheErrorParser(BaseParser):
         match = self.PATTERN.match(line)
         if match:
             data = match.groupdict()
-            level = self.LEVEL_MAP.get(data.get('level', '').lower(), 'INFO')
+            level = self.LEVEL_MAP.get(data.get("level", "").lower(), "INFO")
 
             return LogEntry(
-                    timestamp=None,
+                timestamp=None,
                 level=level,
-                message=data.get('message', ''),
-                source=data.get('client'),
+                message=data.get("message", ""),
+                source=data.get("client"),
                 metadata={
-                    'module': data.get('module'),
-                    'pid': data.get('pid'),
-                }
+                    "module": data.get("module"),
+                    "pid": data.get("pid"),
+                },
             )
 
         # Try legacy format
         match = self.PATTERN_LEGACY.match(line)
         if match:
             data = match.groupdict()
-            level = self.LEVEL_MAP.get(data.get('level', '').lower(), 'INFO')
+            level = self.LEVEL_MAP.get(data.get("level", "").lower(), "INFO")
 
-            return LogEntry(
-                    timestamp=None,
-                level=level,
-                message=data.get('message', ''),
-                source=None,
-                metadata={}
-            )
+            return LogEntry(timestamp=None, level=level, message=data.get("message", ""), source=None, metadata={})
 
         return None
 
@@ -1030,15 +988,15 @@ class NginxAccessParser(BaseParser):
 
     # nginx uses same format as Apache by default
     PATTERN = re.compile(
-        r'^(?P<ip>[\d.:a-fA-F]+)\s+'      # IP address (v4 or v6)
-        r'(?P<ident>\S+)\s+'               # Ident
-        r'(?P<user>\S+)\s+'                # User
-        r'\[(?P<timestamp>[^\]]+)\]\s+'    # Timestamp
-        r'"(?P<request>[^"]*)"\s+'         # Request
-        r'(?P<status>\d+)\s+'              # Status code
-        r'(?P<size>\S+)'                   # Size
-        r'(?:\s+"(?P<referer>[^"]*)"\s+'   # Referer (optional)
-        r'"(?P<user_agent>[^"]*)")?'       # User Agent (optional)
+        r"^(?P<ip>[\d.:a-fA-F]+)\s+"  # IP address (v4 or v6)
+        r"(?P<ident>\S+)\s+"  # Ident
+        r"(?P<user>\S+)\s+"  # User
+        r"\[(?P<timestamp>[^\]]+)\]\s+"  # Timestamp
+        r'"(?P<request>[^"]*)"\s+'  # Request
+        r"(?P<status>\d+)\s+"  # Status code
+        r"(?P<size>\S+)"  # Size
+        r'(?:\s+"(?P<referer>[^"]*)"\s+'  # Referer (optional)
+        r'"(?P<user_agent>[^"]*)")?'  # User Agent (optional)
         r'(?:\s+"(?P<forwarded>[^"]*)")?'  # X-Forwarded-For (optional)
     )
 
@@ -1057,35 +1015,30 @@ class NginxAccessParser(BaseParser):
         # Parse timestamp
         timestamp = None
         with contextlib.suppress(ValueError, TypeError):
-            timestamp = datetime.strptime(
-                data['timestamp'],
-                '%d/%b/%Y:%H:%M:%S %z'
-            )
+            timestamp = datetime.strptime(data["timestamp"], "%d/%b/%Y:%H:%M:%S %z")
 
         # Determine level based on status code
-        status = int(data.get('status', 0))
-        if status >= 500:
-            level = 'ERROR'
-        elif status >= 400:
-            level = 'WARNING'
+        status = int(data.get("status", 0))
+        if status >= 500 or status >= 400:
+            level = "ERROR"
         elif status >= 300:
-            level = 'INFO'
+            level = "INFO"
         else:
-            level = 'DEBUG'
+            level = "DEBUG"
 
         return LogEntry(
             timestamp=timestamp,
             level=level,
-            message=data.get('request', ''),
-            source=data.get('ip'),
+            message=data.get("request", ""),
+            source=data.get("ip"),
             metadata={
-                'status': status,
-                'size': data.get('size'),
-                'user': data.get('user'),
-                'referer': data.get('referer'),
-                'user_agent': data.get('user_agent'),
-                'forwarded': data.get('forwarded'),
-            }
+                "status": status,
+                "size": data.get("size"),
+                "user": data.get("user"),
+                "referer": data.get("referer"),
+                "user_agent": data.get("user_agent"),
+                "forwarded": data.get("forwarded"),
+            },
         )
 
 
@@ -1108,15 +1061,15 @@ class JSONLogParser(BaseParser):
     import json
 
     # Common timestamp field names
-    TIMESTAMP_FIELDS = ['timestamp', 'time', '@timestamp', 'ts', 'datetime']
-    LEVEL_FIELDS = ['level', 'severity', 'lvl', 'log_level', 'loglevel']
-    MESSAGE_FIELDS = ['message', 'msg', 'text', 'log']
-    SOURCE_FIELDS = ['source', 'host', 'hostname', 'server', 'ip']
+    TIMESTAMP_FIELDS = ["timestamp", "time", "@timestamp", "ts", "datetime"]
+    LEVEL_FIELDS = ["level", "severity", "lvl", "log_level", "loglevel"]
+    MESSAGE_FIELDS = ["message", "msg", "text", "log"]
+    SOURCE_FIELDS = ["source", "host", "hostname", "server", "ip"]
 
     def can_parse(self, line: str) -> bool:
         """Check if line is valid JSON."""
         line = line.strip()
-        return line.startswith('{') and line.endswith('}')
+        return line.startswith("{") and line.endswith("}")
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a JSON log line."""
@@ -1163,13 +1116,7 @@ class JSONLogParser(BaseParser):
                 source = str(data[field])
                 break
 
-        return LogEntry(
-            timestamp=timestamp,
-            level=level,
-            message=message,
-            source=source,
-            metadata=data
-        )
+        return LogEntry(timestamp=timestamp, level=level, message=message, source=source, metadata=data)
 
     def _parse_timestamp(self, value: Any) -> Optional[datetime]:
         """Attempt to parse various timestamp formats."""
@@ -1183,11 +1130,11 @@ class JSONLogParser(BaseParser):
         if isinstance(value, str):
             # Try common formats
             formats = [
-                '%Y-%m-%dT%H:%M:%S.%fZ',
-                '%Y-%m-%dT%H:%M:%SZ',
-                '%Y-%m-%dT%H:%M:%S%z',
-                '%Y-%m-%d %H:%M:%S',
-                '%Y-%m-%d %H:%M:%S.%f',
+                "%Y-%m-%dT%H:%M:%S.%fZ",
+                "%Y-%m-%dT%H:%M:%SZ",
+                "%Y-%m-%dT%H:%M:%S%z",
+                "%Y-%m-%d %H:%M:%S",
+                "%Y-%m-%d %H:%M:%S.%f",
             ]
             for fmt in formats:
                 try:
@@ -1200,15 +1147,15 @@ class JSONLogParser(BaseParser):
     def _normalize_level(self, level: Optional[str]) -> str:
         """Normalize log level to standard values."""
         if not level:
-            return 'INFO'
+            return "INFO"
 
         level_map = {
-            'FATAL': 'CRITICAL',
-            'ERR': 'ERROR',
-            'WARN': 'WARNING',
-            'INFORMATION': 'INFO',
-            'DBG': 'DEBUG',
-            'TRACE': 'DEBUG',
+            "FATAL": "CRITICAL",
+            "ERR": "ERROR",
+            "WARN": "WARNING",
+            "INFORMATION": "INFO",
+            "DBG": "DEBUG",
+            "TRACE": "DEBUG",
         }
 
         return level_map.get(level, level)
@@ -1226,53 +1173,56 @@ class SyslogParser(BaseParser):
 
     # RFC 3164 pattern
     PATTERN_3164 = re.compile(
-        r'^<(?P<priority>\d+)>'           # Priority
-        r'(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+'  # Timestamp
-        r'(?P<hostname>\S+)\s+'           # Hostname
-        r'(?P<tag>\S+?)(?:\[(?P<pid>\d+)\])?:\s*'  # Tag and optional PID
-        r'(?P<message>.*)$'               # Message
+        r"^<(?P<priority>\d+)>"  # Priority
+        r"(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+"  # Timestamp
+        r"(?P<hostname>\S+)\s+"  # Hostname
+        r"(?P<tag>\S+?)(?:\[(?P<pid>\d+)\])?:\s*"  # Tag and optional PID
+        r"(?P<message>.*)$"  # Message
     )
 
     # BSD syslog pattern (common format without priority, used by many log analyzers)
     PATTERN_BSD = re.compile(
-        r'^(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+'  # Timestamp
-        r'(?P<hostname>\S+)\s+'           # Hostname
-        r'(?P<tag>\S+?)(?:\[(?P<pid>\d+)\])?:\s*'  # Tag and optional PID
-        r'(?P<message>.*)$'               # Message
+        r"^(?P<timestamp>\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})\s+"  # Timestamp
+        r"(?P<hostname>\S+)\s+"  # Hostname
+        r"(?P<tag>\S+?)(?:\[(?P<pid>\d+)\])?:\s*"  # Tag and optional PID
+        r"(?P<message>.*)$"  # Message
     )
 
     # RFC 5424 pattern
     PATTERN_5424 = re.compile(
-        r'^<(?P<priority>\d+)>'           # Priority
-        r'(?P<version>\d+)\s+'            # Version
-        r'(?P<timestamp>\S+)\s+'          # Timestamp
-        r'(?P<hostname>\S+)\s+'           # Hostname
-        r'(?P<appname>\S+)\s+'            # App name
-        r'(?P<procid>\S+)\s+'             # Process ID
-        r'(?P<msgid>\S+)\s+'              # Message ID
-        r'(?P<structured_data>-|(?:\[.+?\])+)\s+'  # Structured Data
-        r'(?P<message>.*)$'               # Message
+        r"^<(?P<priority>\d+)>"  # Priority
+        r"(?P<version>\d+)\s+"  # Version
+        r"(?P<timestamp>\S+)\s+"  # Timestamp
+        r"(?P<hostname>\S+)\s+"  # Hostname
+        r"(?P<appname>\S+)\s+"  # App name
+        r"(?P<procid>\S+)\s+"  # Process ID
+        r"(?P<msgid>\S+)\s+"  # Message ID
+        r"(?P<structured_data>-|(?:\[.+?\])+)\s+"  # Structured Data
+        r"(?P<message>.*)$"  # Message
     )
 
     # Syslog severity levels (from priority)
     SEVERITY_MAP = {
-        0: 'CRITICAL',  # Emergency
-        1: 'CRITICAL',  # Alert
-        2: 'CRITICAL',  # Critical
-        3: 'ERROR',     # Error
-        4: 'WARNING',   # Warning
-        5: 'INFO',      # Notice
-        6: 'INFO',      # Informational
-        7: 'DEBUG',     # Debug
+        0: "CRITICAL",  # Emergency
+        1: "CRITICAL",  # Alert
+        2: "CRITICAL",  # Critical
+        3: "ERROR",  # Error
+        4: "WARNING",  # Warning
+        5: "INFO",  # Notice
+        6: "INFO",  # Informational
+        7: "DEBUG",  # Debug
     }
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches syslog format."""
         # Check for RFC format with priority
-        if line.startswith('<') and '>' in line[:5]:
+        if line.startswith("<") and ">" in line[:5]:
             return True
         # Check for BSD format (starts with month abbreviation)
-        return bool(len(line) > 15 and line[:3] in ('Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'))
+        return bool(
+            len(line) > 15
+            and line[:3] in ("Jan", "Feb", "Mar", "Apr", "May", "Jun", "Jul", "Aug", "Sep", "Oct", "Nov", "Dec")
+        )
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a syslog line."""
@@ -1298,76 +1248,76 @@ class SyslogParser(BaseParser):
         data = match.groupdict()
 
         # Infer severity from message keywords
-        message = data.get('message', '')
-        level = 'INFO'
+        message = data.get("message", "")
+        level = "INFO"
         msg_lower = message.lower()
-        if 'error' in msg_lower or 'fail' in msg_lower or 'denied' in msg_lower:
-            level = 'ERROR'
-        elif 'warn' in msg_lower:
-            level = 'WARNING'
-        elif 'debug' in msg_lower:
-            level = 'DEBUG'
+        if "error" in msg_lower or "fail" in msg_lower or "denied" in msg_lower:
+            level = "ERROR"
+        elif "warn" in msg_lower:
+            level = "WARNING"
+        elif "debug" in msg_lower:
+            level = "DEBUG"
 
         return LogEntry(
             timestamp=None,  # BSD timestamps need current year
             level=level,
             message=message,
-            source=data.get('hostname'),
+            source=data.get("hostname"),
             metadata={
-                'tag': data.get('tag'),
-                'pid': data.get('pid'),
-            }
+                "tag": data.get("tag"),
+                "pid": data.get("pid"),
+            },
         )
 
     def _parse_3164(self, match: re.Match, line: str) -> LogEntry:
         """Parse RFC 3164 syslog."""
         data = match.groupdict()
 
-        priority = int(data.get('priority', 0))
+        priority = int(data.get("priority", 0))
         severity = priority % 8
         facility = priority // 8
 
         return LogEntry(
             timestamp=None,  # 3164 timestamps need current year
-            level=self.SEVERITY_MAP.get(severity, 'INFO'),
-            message=data.get('message', ''),
-            source=data.get('hostname'),
+            level=self.SEVERITY_MAP.get(severity, "INFO"),
+            message=data.get("message", ""),
+            source=data.get("hostname"),
             metadata={
-                'facility': facility,
-                'severity': severity,
-                'tag': data.get('tag'),
-                'pid': data.get('pid'),
-            }
+                "facility": facility,
+                "severity": severity,
+                "tag": data.get("tag"),
+                "pid": data.get("pid"),
+            },
         )
 
     def _parse_5424(self, match: re.Match, line: str) -> LogEntry:
         """Parse RFC 5424 syslog."""
         data = match.groupdict()
 
-        priority = int(data.get('priority', 0))
+        priority = int(data.get("priority", 0))
         severity = priority % 8
         facility = priority // 8
 
         # Parse ISO timestamp
         timestamp = None
-        ts_str = data.get('timestamp', '')
-        if ts_str and ts_str != '-':
+        ts_str = data.get("timestamp", "")
+        if ts_str and ts_str != "-":
             with contextlib.suppress(ValueError):
-                timestamp = datetime.fromisoformat(ts_str.replace('Z', '+00:00'))
+                timestamp = datetime.fromisoformat(ts_str.replace("Z", "+00:00"))
 
         return LogEntry(
             timestamp=timestamp,
-            level=self.SEVERITY_MAP.get(severity, 'INFO'),
-            message=data.get('message', ''),
-            source=data.get('hostname'),
+            level=self.SEVERITY_MAP.get(severity, "INFO"),
+            message=data.get("message", ""),
+            source=data.get("hostname"),
             metadata={
-                'facility': facility,
-                'severity': severity,
-                'appname': data.get('appname'),
-                'procid': data.get('procid'),
-                'msgid': data.get('msgid'),
-                'structured_data': data.get('structured_data'),
-            }
+                "facility": facility,
+                "severity": severity,
+                "appname": data.get("appname"),
+                "procid": data.get("procid"),
+                "msgid": data.get("msgid"),
+                "structured_data": data.get("structured_data"),
+            },
         )
 
 
@@ -1381,26 +1331,26 @@ class AndroidParser(BaseParser):
     name = "android"
 
     PATTERN = re.compile(
-        r'^(?P<month>\d{2})-(?P<day>\d{2})\s+'
-        r'(?P<time>\d{2}:\d{2}:\d{2}\.\d{3})\s+'
-        r'(?P<pid>\d+)\s+(?P<tid>\d+)\s+'
-        r'(?P<level>[VDIWEF])\s+'
-        r'(?P<tag>\S+?):\s*'
-        r'(?P<message>.*)$'
+        r"^(?P<month>\d{2})-(?P<day>\d{2})\s+"
+        r"(?P<time>\d{2}:\d{2}:\d{2}\.\d{3})\s+"
+        r"(?P<pid>\d+)\s+(?P<tid>\d+)\s+"
+        r"(?P<level>[VDIWEF])\s+"
+        r"(?P<tag>\S+?):\s*"
+        r"(?P<message>.*)$"
     )
 
     LEVEL_MAP = {
-        'V': 'DEBUG',
-        'D': 'DEBUG',
-        'I': 'INFO',
-        'W': 'WARNING',
-        'E': 'ERROR',
-        'F': 'CRITICAL',
+        "V": "DEBUG",
+        "D": "DEBUG",
+        "I": "INFO",
+        "W": "WARNING",
+        "E": "ERROR",
+        "F": "CRITICAL",
     }
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches Android logcat format."""
-        return bool(re.match(r'^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}', line))
+        return bool(re.match(r"^\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d{3}", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an Android logcat line."""
@@ -1409,18 +1359,18 @@ class AndroidParser(BaseParser):
             return None
 
         data = match.groupdict()
-        level = self.LEVEL_MAP.get(data.get('level', 'I'), 'INFO')
+        level = self.LEVEL_MAP.get(data.get("level", "I"), "INFO")
 
         return LogEntry(
             timestamp=None,  # Would need year for full timestamp
             level=level,
-            message=data.get('message', ''),
-            source=data.get('tag'),
+            message=data.get("message", ""),
+            source=data.get("tag"),
             metadata={
-                'pid': data.get('pid'),
-                'tid': data.get('tid'),
-                'tag': data.get('tag'),
-            }
+                "pid": data.get("pid"),
+                "tid": data.get("tid"),
+                "tag": data.get("tag"),
+            },
         )
 
 
@@ -1438,29 +1388,29 @@ class JavaLogParser(BaseParser):
 
     # Full timestamp format (Hadoop, Zookeeper)
     PATTERN_FULL = re.compile(
-        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*'
-        r'[-]?\s*'
-        r'(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+'
-        r'(?:\[(?P<thread>[^\]]+)\]\s+)?'
-        r'(?P<class>\S+?):\s*'
-        r'(?P<message>.*)$'
+        r"^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}[,\.]\d{3})\s*"
+        r"[-]?\s*"
+        r"(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+"
+        r"(?:\[(?P<thread>[^\]]+)\]\s+)?"
+        r"(?P<class>\S+?):\s*"
+        r"(?P<message>.*)$"
     )
 
     # Short timestamp format (Spark: YY/MM/DD)
     PATTERN_SHORT = re.compile(
-        r'^(?P<timestamp>\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\s+'
-        r'(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+'
-        r'(?P<class>\S+?):\s*'
-        r'(?P<message>.*)$'
+        r"^(?P<timestamp>\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2})\s+"
+        r"(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+"
+        r"(?P<class>\S+?):\s*"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches Java log format."""
         # Check for full timestamp
-        if re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}', line):
+        if re.match(r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}", line):
             return True
         # Check for short timestamp (Spark)
-        return bool(re.match(r'^\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}', line))
+        return bool(re.match(r"^\d{2}/\d{2}/\d{2}\s+\d{2}:\d{2}:\d{2}", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Java log line."""
@@ -1479,21 +1429,21 @@ class JavaLogParser(BaseParser):
     def _parse_match(self, match: re.Match, line: str) -> LogEntry:
         """Parse matched data into LogEntry."""
         data = match.groupdict()
-        level = data.get('level', 'INFO').upper()
-        if level == 'WARN':
-            level = 'WARNING'
-        elif level == 'FATAL':
-            level = 'CRITICAL'
+        level = data.get("level", "INFO").upper()
+        if level == "WARN":
+            level = "WARNING"
+        elif level == "FATAL":
+            level = "CRITICAL"
 
         return LogEntry(
             timestamp=None,
             level=level,
-            message=data.get('message', ''),
-            source=data.get('class'),
+            message=data.get("message", ""),
+            source=data.get("class"),
             metadata={
-                'thread': data.get('thread'),
-                'class': data.get('class'),
-            }
+                "thread": data.get("thread"),
+                "class": data.get("class"),
+            },
         )
 
 
@@ -1507,17 +1457,17 @@ class HDFSParser(BaseParser):
     name = "hdfs"
 
     PATTERN = re.compile(
-        r'^(?P<date>\d{6})\s+'
-        r'(?P<time>\d{6})\s+'
-        r'(?P<id>\d+)\s+'
-        r'(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+'
-        r'(?P<class>\S+?):\s*'
-        r'(?P<message>.*)$'
+        r"^(?P<date>\d{6})\s+"
+        r"(?P<time>\d{6})\s+"
+        r"(?P<id>\d+)\s+"
+        r"(?P<level>INFO|WARN|ERROR|DEBUG|TRACE|FATAL)\s+"
+        r"(?P<class>\S+?):\s*"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches HDFS format."""
-        return bool(re.match(r'^\d{6}\s+\d{6}\s+\d+\s+(?:INFO|WARN|ERROR|DEBUG)', line))
+        return bool(re.match(r"^\d{6}\s+\d{6}\s+\d+\s+(?:INFO|WARN|ERROR|DEBUG)", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an HDFS log line."""
@@ -1526,19 +1476,19 @@ class HDFSParser(BaseParser):
             return None
 
         data = match.groupdict()
-        level = data.get('level', 'INFO').upper()
-        if level == 'WARN':
-            level = 'WARNING'
+        level = data.get("level", "INFO").upper()
+        if level == "WARN":
+            level = "WARNING"
 
         return LogEntry(
             timestamp=None,
             level=level,
-            message=data.get('message', ''),
-            source=data.get('class'),
+            message=data.get("message", ""),
+            source=data.get("class"),
             metadata={
-                'id': data.get('id'),
-                'class': data.get('class'),
-            }
+                "id": data.get("id"),
+                "class": data.get("class"),
+            },
         )
 
 
@@ -1553,30 +1503,30 @@ class SupercomputerParser(BaseParser):
 
     # BGL format
     PATTERN_BGL = re.compile(
-        r'^-\s+'
-        r'(?P<timestamp>\d+)\s+'
-        r'(?P<date>\d{4}\.\d{2}\.\d{2})\s+'
-        r'(?P<node>\S+)\s+'
-        r'(?P<datetime>\S+)\s+'
-        r'(?P<node2>\S+)\s+'
-        r'(?P<type>\S+)\s+'
-        r'(?P<component>\S+)\s+'
-        r'(?P<level>\S+)\s+'
-        r'(?P<message>.*)$'
+        r"^-\s+"
+        r"(?P<timestamp>\d+)\s+"
+        r"(?P<date>\d{4}\.\d{2}\.\d{2})\s+"
+        r"(?P<node>\S+)\s+"
+        r"(?P<datetime>\S+)\s+"
+        r"(?P<node2>\S+)\s+"
+        r"(?P<type>\S+)\s+"
+        r"(?P<component>\S+)\s+"
+        r"(?P<level>\S+)\s+"
+        r"(?P<message>.*)$"
     )
 
     # Thunderbird format (has syslog-like content after prefix)
     PATTERN_THUNDER = re.compile(
-        r'^-\s+'
-        r'(?P<timestamp>\d+)\s+'
-        r'(?P<date>\d{4}\.\d{2}\.\d{2})\s+'
-        r'(?P<node>\S+)\s+'
-        r'(?P<syslog_data>.*)$'
+        r"^-\s+"
+        r"(?P<timestamp>\d+)\s+"
+        r"(?P<date>\d{4}\.\d{2}\.\d{2})\s+"
+        r"(?P<node>\S+)\s+"
+        r"(?P<syslog_data>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches supercomputer format."""
-        return line.startswith('- ') and re.match(r'^-\s+\d+\s+\d{4}\.\d{2}\.\d{2}', line)
+        return line.startswith("- ") and re.match(r"^-\s+\d+\s+\d{4}\.\d{2}\.\d{2}", line)
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a supercomputer log line."""
@@ -1584,41 +1534,35 @@ class SupercomputerParser(BaseParser):
         match = self.PATTERN_BGL.match(line)
         if match:
             data = match.groupdict()
-            level = data.get('level', 'INFO').upper()
-            if level not in ('DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL'):
-                level = 'INFO'
+            level = data.get("level", "INFO").upper()
+            if level not in ("DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"):
+                level = "INFO"
 
             return LogEntry(
-                    timestamp=None,
+                timestamp=None,
                 level=level,
-                message=data.get('message', ''),
-                source=data.get('node'),
+                message=data.get("message", ""),
+                source=data.get("node"),
                 metadata={
-                    'type': data.get('type'),
-                    'component': data.get('component'),
-                }
+                    "type": data.get("type"),
+                    "component": data.get("component"),
+                },
             )
 
         # Try Thunderbird format
         match = self.PATTERN_THUNDER.match(line)
         if match:
             data = match.groupdict()
-            syslog_data = data.get('syslog_data', '')
+            syslog_data = data.get("syslog_data", "")
 
             # Infer level from message
-            level = 'INFO'
-            if 'error' in syslog_data.lower() or 'fail' in syslog_data.lower():
-                level = 'ERROR'
-            elif 'warn' in syslog_data.lower():
-                level = 'WARNING'
+            level = "INFO"
+            if "error" in syslog_data.lower() or "fail" in syslog_data.lower():
+                level = "ERROR"
+            elif "warn" in syslog_data.lower():
+                level = "WARNING"
 
-            return LogEntry(
-                    timestamp=None,
-                level=level,
-                message=syslog_data,
-                source=data.get('node'),
-                metadata={}
-            )
+            return LogEntry(timestamp=None, level=level, message=syslog_data, source=data.get("node"), metadata={})
 
         return None
 
@@ -1633,15 +1577,15 @@ class WindowsEventParser(BaseParser):
     name = "windows"
 
     PATTERN = re.compile(
-        r'^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}),\s*'
-        r'(?P<level>\w+)\s+'
-        r'(?P<component>\w+)\s+'
-        r'(?P<message>.*)$'
+        r"^(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}),\s*"
+        r"(?P<level>\w+)\s+"
+        r"(?P<component>\w+)\s+"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches Windows event format."""
-        return bool(re.match(r'^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2},\s*\w+', line))
+        return bool(re.match(r"^\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2},\s*\w+", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Windows event log line."""
@@ -1650,24 +1594,24 @@ class WindowsEventParser(BaseParser):
             return None
 
         data = match.groupdict()
-        level = data.get('level', 'Info').upper()
-        if level == 'INFO':
-            level = 'INFO'
-        elif level in ('WARN', 'WARNING'):
-            level = 'WARNING'
-        elif level == 'ERROR':
-            level = 'ERROR'
+        level = data.get("level", "Info").upper()
+        if level == "INFO":
+            level = "INFO"
+        elif level in ("WARN", "WARNING"):
+            level = "WARNING"
+        elif level == "ERROR":
+            level = "ERROR"
         else:
-            level = 'INFO'
+            level = "INFO"
 
         return LogEntry(
             timestamp=None,
             level=level,
-            message=data.get('message', ''),
-            source=data.get('component'),
+            message=data.get("message", ""),
+            source=data.get("component"),
             metadata={
-                'component': data.get('component'),
-            }
+                "component": data.get("component"),
+            },
         )
 
 
@@ -1681,14 +1625,14 @@ class ProxifierParser(BaseParser):
     name = "proxifier"
 
     PATTERN = re.compile(
-        r'^\[(?P<date>\d+\.\d+)\s+(?P<time>\d{2}:\d{2}:\d{2})\]\s+'
-        r'(?P<process>\S+)(?:\s+\*\d+)?\s+-\s+'
-        r'(?P<message>.*)$'
+        r"^\[(?P<date>\d+\.\d+)\s+(?P<time>\d{2}:\d{2}:\d{2})\]\s+"
+        r"(?P<process>\S+)(?:\s+\*\d+)?\s+-\s+"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches Proxifier format."""
-        return line.startswith('[') and bool(re.match(r'^\[\d+\.\d+\s+\d{2}:\d{2}:\d{2}\]', line))
+        return line.startswith("[") and bool(re.match(r"^\[\d+\.\d+\s+\d{2}:\d{2}:\d{2}\]", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Proxifier log line."""
@@ -1697,23 +1641,23 @@ class ProxifierParser(BaseParser):
             return None
 
         data = match.groupdict()
-        message = data.get('message', '')
+        message = data.get("message", "")
 
         # Infer level from message
-        level = 'INFO'
-        if 'error' in message.lower() or 'fail' in message.lower():
-            level = 'ERROR'
-        elif 'close' in message.lower():
-            level = 'DEBUG'
+        level = "INFO"
+        if "error" in message.lower() or "fail" in message.lower():
+            level = "ERROR"
+        elif "close" in message.lower():
+            level = "DEBUG"
 
         return LogEntry(
             timestamp=None,
             level=level,
             message=message,
-            source=data.get('process'),
+            source=data.get("process"),
             metadata={
-                'process': data.get('process'),
-            }
+                "process": data.get("process"),
+            },
         )
 
 
@@ -1727,19 +1671,19 @@ class HPCParser(BaseParser):
     name = "hpc"
 
     PATTERN = re.compile(
-        r'^(?P<id>\d+)\s+'
-        r'(?P<node>\S+)\s+'
-        r'(?P<category>\S+)\s+'
-        r'(?P<event>\S+)\s+'
-        r'(?P<timestamp>\d+)\s+'
-        r'(?P<flag>\d+)\s+'
-        r'(?P<message>.*)$'
+        r"^(?P<id>\d+)\s+"
+        r"(?P<node>\S+)\s+"
+        r"(?P<category>\S+)\s+"
+        r"(?P<event>\S+)\s+"
+        r"(?P<timestamp>\d+)\s+"
+        r"(?P<flag>\d+)\s+"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches HPC format."""
         # Matches: ID node/gige category.subcategory timestamp flag message
-        return bool(re.match(r'^\d+\s+(?:node-\d+|gige\d+)\s+\w+(?:\.\w+)?', line))
+        return bool(re.match(r"^\d+\s+(?:node-\d+|gige\d+)\s+\w+(?:\.\w+)?", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an HPC log line."""
@@ -1748,25 +1692,25 @@ class HPCParser(BaseParser):
             return None
 
         data = match.groupdict()
-        event = data.get('event', '')
+        event = data.get("event", "")
 
         # Infer level from event name
-        level = 'INFO'
-        if 'unavailable' in event or 'error' in event:
-            level = 'ERROR'
-        elif 'warning' in event:
-            level = 'WARNING'
+        level = "INFO"
+        if "unavailable" in event or "error" in event:
+            level = "ERROR"
+        elif "warning" in event:
+            level = "WARNING"
 
         return LogEntry(
             timestamp=None,
             level=level,
-            message=data.get('message', ''),
-            source=data.get('node'),
+            message=data.get("message", ""),
+            source=data.get("node"),
             metadata={
-                'id': data.get('id'),
-                'category': data.get('category'),
-                'event': data.get('event'),
-            }
+                "id": data.get("id"),
+                "category": data.get("category"),
+                "event": data.get("event"),
+            },
         )
 
 
@@ -1781,15 +1725,15 @@ class HealthAppParser(BaseParser):
     name = "healthapp"
 
     PATTERN = re.compile(
-        r'^(?P<timestamp>\d{8}-\d{1,2}:\d{1,2}:\d{1,2}:\d{1,3})\|'
-        r'(?P<component>[^|]+)\|'
-        r'(?P<id>\d+)\|'
-        r'(?P<message>.*)$'
+        r"^(?P<timestamp>\d{8}-\d{1,2}:\d{1,2}:\d{1,2}:\d{1,3})\|"
+        r"(?P<component>[^|]+)\|"
+        r"(?P<id>\d+)\|"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches HealthApp format."""
-        return bool(re.match(r'^\d{8}-\d{1,2}:\d{1,2}:\d{1,2}:\d{1,3}\|', line))
+        return bool(re.match(r"^\d{8}-\d{1,2}:\d{1,2}:\d{1,2}:\d{1,3}\|", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a HealthApp log line."""
@@ -1802,20 +1746,20 @@ class HealthAppParser(BaseParser):
         # Parse timestamp: 20171223-22:15:29:606
         timestamp = None
         try:
-            ts_str = data['timestamp']
+            ts_str = data["timestamp"]
             timestamp = datetime.strptime(ts_str, "%Y%m%d-%H:%M:%S:%f")
         except (ValueError, KeyError):
             pass
 
         return LogEntry(
             timestamp=timestamp,
-            level='INFO',
-            message=data.get('message', ''),
-            source=data.get('component'),
+            level="INFO",
+            message=data.get("message", ""),
+            source=data.get("component"),
             metadata={
-                'component': data.get('component'),
-                'id': data.get('id'),
-            }
+                "component": data.get("component"),
+                "id": data.get("id"),
+            },
         )
 
 
@@ -1830,19 +1774,19 @@ class OpenStackParser(BaseParser):
     name = "openstack"
 
     PATTERN = re.compile(
-        r'^(?P<filename>\S+)\s+'
-        r'(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)\s+'
-        r'(?P<pid>\d+)\s+'
-        r'(?P<level>\w+)\s+'
-        r'(?P<component>\S+)\s+'
-        r'\[(?P<request_id>[^\]]+)\]\s+'
-        r'(?P<message>.*)$'
+        r"^(?P<filename>\S+)\s+"
+        r"(?P<timestamp>\d{4}-\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2}\.\d+)\s+"
+        r"(?P<pid>\d+)\s+"
+        r"(?P<level>\w+)\s+"
+        r"(?P<component>\S+)\s+"
+        r"\[(?P<request_id>[^\]]+)\]\s+"
+        r"(?P<message>.*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches OpenStack format."""
         # Look for the characteristic [req-uuid] pattern
-        return bool(re.match(r'^\S+\s+\d{4}-\d{2}-\d{2}.*\[req-', line))
+        return bool(re.match(r"^\S+\s+\d{4}-\d{2}-\d{2}.*\[req-", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse an OpenStack log line."""
@@ -1855,23 +1799,23 @@ class OpenStackParser(BaseParser):
         # Parse timestamp
         timestamp = None
         try:
-            ts_str = data['timestamp']
+            ts_str = data["timestamp"]
             timestamp = datetime.strptime(ts_str, "%Y-%m-%d %H:%M:%S.%f")
         except (ValueError, KeyError):
             pass
 
-        level = data.get('level', 'INFO').upper()
+        level = data.get("level", "INFO").upper()
 
         return LogEntry(
             timestamp=timestamp,
             level=level,
-            message=data.get('message', ''),
-            source=data.get('component'),
+            message=data.get("message", ""),
+            source=data.get("component"),
             metadata={
-                'filename': data.get('filename'),
-                'pid': data.get('pid'),
-                'request_id': data.get('request_id'),
-            }
+                "filename": data.get("filename"),
+                "pid": data.get("pid"),
+                "request_id": data.get("request_id"),
+            },
         )
 
 
@@ -1886,22 +1830,22 @@ class SquidParser(BaseParser):
     name = "squid"
 
     PATTERN = re.compile(
-        r'^(?P<timestamp>\d+(?:\.\d+)?)\s+'
-        r'(?P<duration>-?\d+)\s+'
-        r'(?P<client_ip>\S+)\s+'
-        r'(?P<result_code>\S+)\s+'
-        r'(?P<bytes>-?\d+)\s+'
-        r'(?P<method>\w+)\s+'
-        r'(?P<url>\S+)\s+'
-        r'(?P<user>\S+)\s+'
-        r'(?P<hierarchy>\S+)\s*'
-        r'(?P<content_type>\S*)$'
+        r"^(?P<timestamp>\d+(?:\.\d+)?)\s+"
+        r"(?P<duration>-?\d+)\s+"
+        r"(?P<client_ip>\S+)\s+"
+        r"(?P<result_code>\S+)\s+"
+        r"(?P<bytes>-?\d+)\s+"
+        r"(?P<method>\w+)\s+"
+        r"(?P<url>\S+)\s+"
+        r"(?P<user>\S+)\s+"
+        r"(?P<hierarchy>\S+)\s*"
+        r"(?P<content_type>\S*)$"
     )
 
     def can_parse(self, line: str) -> bool:
         """Check if line matches Squid format."""
         # Squid lines start with epoch timestamp (10 digits, optional decimal) followed by duration
-        return bool(re.match(r'^\d{10}(?:\.\d+)?\s+-?\d+\s+\S+\s+\w+[_/]', line))
+        return bool(re.match(r"^\d{10}(?:\.\d+)?\s+-?\d+\s+\S+\s+\w+[_/]", line))
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a Squid log line."""
@@ -1914,31 +1858,29 @@ class SquidParser(BaseParser):
         # Parse epoch timestamp
         timestamp = None
         try:
-            epoch = float(data['timestamp'])
+            epoch = float(data["timestamp"])
             timestamp = datetime.fromtimestamp(epoch)
         except (ValueError, KeyError, OSError):
             pass
 
         # Infer level from result code
-        result = data.get('result_code', '')
-        level = 'INFO'
-        if '/5' in result or 'ERR' in result:
-            level = 'ERROR'
-        elif '/4' in result or 'DENIED' in result:
-            level = 'WARNING'
+        result = data.get("result_code", "")
+        level = "INFO"
+        if "/5" in result or "ERR" in result or ("/4" in result or "DENIED" in result):
+            level = "ERROR"
 
         return LogEntry(
             timestamp=timestamp,
             level=level,
             message=f"{data.get('method', '')} {data.get('url', '')}",
-            source=data.get('client_ip'),
+            source=data.get("client_ip"),
             metadata={
-                'duration_ms': data.get('duration'),
-                'bytes': data.get('bytes'),
-                'result_code': data.get('result_code'),
-                'user': data.get('user'),
-                'hierarchy': data.get('hierarchy'),
-            }
+                "duration_ms": data.get("duration"),
+                "bytes": data.get("bytes"),
+                "result_code": data.get("result_code"),
+                "user": data.get("user"),
+                "hierarchy": data.get("hierarchy"),
+            },
         )
 
 
@@ -1954,16 +1896,16 @@ class NginxParser(BaseParser):
 
     # Standard nginx combined format with optional extensions
     PATTERN = re.compile(
-        r'^(?P<client_ip>\S+)\s+'
-        r'-\s+'
-        r'(?P<user>\S+)\s+'
-        r'\[(?P<timestamp>[^\]]+)\]\s+'
+        r"^(?P<client_ip>\S+)\s+"
+        r"-\s+"
+        r"(?P<user>\S+)\s+"
+        r"\[(?P<timestamp>[^\]]+)\]\s+"
         r'"(?P<request>[^"]*)"\s+'
-        r'(?P<status>\d+)\s+'
-        r'(?P<bytes>\d+)\s+'
+        r"(?P<status>\d+)\s+"
+        r"(?P<bytes>\d+)\s+"
         r'"(?P<referer>[^"]*)"\s+'
         r'"(?P<user_agent>[^"]*)"'
-        r'(?:\s+(?P<extra>.*))?$'
+        r"(?:\s+(?P<extra>.*))?$"
     )
 
     def can_parse(self, line: str) -> bool:
@@ -1981,32 +1923,30 @@ class NginxParser(BaseParser):
         # Parse timestamp
         timestamp = None
         try:
-            ts_str = data['timestamp']
+            ts_str = data["timestamp"]
             timestamp = datetime.strptime(ts_str, "%d/%b/%Y:%H:%M:%S %z")
         except (ValueError, KeyError):
             with contextlib.suppress(ValueError, KeyError):
                 timestamp = datetime.strptime(ts_str.split()[0], "%d/%b/%Y:%H:%M:%S")
 
         # Infer level from status code
-        status = int(data.get('status', 200))
-        if status >= 500:
-            level = 'ERROR'
-        elif status >= 400:
-            level = 'WARNING'
+        status = int(data.get("status", 200))
+        if status >= 500 or status >= 400:
+            level = "ERROR"
         else:
-            level = 'INFO'
+            level = "INFO"
 
         return LogEntry(
             timestamp=timestamp,
             level=level,
-            message=data.get('request', ''),
-            source=data.get('client_ip'),
+            message=data.get("request", ""),
+            source=data.get("client_ip"),
             metadata={
-                'status': status,
-                'bytes': data.get('bytes'),
-                'user_agent': data.get('user_agent'),
-                'referer': data.get('referer'),
-            }
+                "status": status,
+                "bytes": data.get("bytes"),
+                "user_agent": data.get("user_agent"),
+                "referer": data.get("referer"),
+            },
         )
 
 
@@ -2026,39 +1966,38 @@ class UniversalFallbackParser(BaseParser):
     # Common timestamp patterns (ordered by specificity)
     TIMESTAMP_PATTERNS = [
         # ISO 8601 format
-        (r'(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)', 'iso'),
+        (r"(\d{4}-\d{2}-\d{2}[T ]\d{2}:\d{2}:\d{2}(?:\.\d+)?(?:Z|[+-]\d{2}:?\d{2})?)", "iso"),
         # Common log format
-        (r'(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2})', 'clf'),
+        (r"(\d{2}/\w{3}/\d{4}:\d{2}:\d{2}:\d{2})", "clf"),
         # US date format
-        (r'(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})', 'us_date'),
+        (r"(\d{2}/\d{2}/\d{4}\s+\d{2}:\d{2}:\d{2})", "us_date"),
         # Syslog BSD format
-        (r'(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})', 'syslog'),
+        (r"(\w{3}\s+\d{1,2}\s+\d{2}:\d{2}:\d{2})", "syslog"),
         # Unix timestamp (epoch)
-        (r'\b(\d{10})\b', 'epoch'),
+        (r"\b(\d{10})\b", "epoch"),
         # Short date format
-        (r'(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})', 'short'),
+        (r"(\d{2}-\d{2}\s+\d{2}:\d{2}:\d{2})", "short"),
     ]
 
     # Common log level patterns
     LEVEL_PATTERN = re.compile(
-        r'\b(FATAL|CRITICAL|CRIT|ERROR|ERR|WARNING|WARN|INFO|DEBUG|DBG|TRACE|NOTICE)\b',
-        re.IGNORECASE
+        r"\b(FATAL|CRITICAL|CRIT|ERROR|ERR|WARNING|WARN|INFO|DEBUG|DBG|TRACE|NOTICE)\b", re.IGNORECASE
     )
 
     # Level normalization map
     LEVEL_MAP = {
-        'fatal': 'CRITICAL',
-        'critical': 'CRITICAL',
-        'crit': 'CRITICAL',
-        'error': 'ERROR',
-        'err': 'ERROR',
-        'warning': 'WARNING',
-        'warn': 'WARNING',
-        'info': 'INFO',
-        'debug': 'DEBUG',
-        'dbg': 'DEBUG',
-        'trace': 'DEBUG',
-        'notice': 'INFO',
+        "fatal": "CRITICAL",
+        "critical": "CRITICAL",
+        "crit": "CRITICAL",
+        "error": "ERROR",
+        "err": "ERROR",
+        "warning": "WARNING",
+        "warn": "WARNING",
+        "info": "INFO",
+        "debug": "DEBUG",
+        "dbg": "DEBUG",
+        "trace": "DEBUG",
+        "notice": "INFO",
     }
 
     def can_parse(self, line: str) -> bool:
@@ -2080,7 +2019,7 @@ class UniversalFallbackParser(BaseParser):
 
         timestamp_str = None
         timestamp_format = None
-        level = 'INFO'  # Default level
+        level = "INFO"  # Default level
         message = line
 
         # Try to extract timestamp
@@ -2090,8 +2029,8 @@ class UniversalFallbackParser(BaseParser):
                 timestamp_str = match.group(1)
                 timestamp_format = fmt
                 # Remove timestamp from message extraction
-                message = line[match.end():].strip()
-                if message.startswith('-') or message.startswith(':'):
+                message = line[match.end() :].strip()
+                if message.startswith("-") or message.startswith(":"):
                     message = message[1:].strip()
                 break
 
@@ -2099,22 +2038,22 @@ class UniversalFallbackParser(BaseParser):
         level_match = self.LEVEL_PATTERN.search(line)
         if level_match:
             found_level = level_match.group(1).lower()
-            level = self.LEVEL_MAP.get(found_level, 'INFO')
+            level = self.LEVEL_MAP.get(found_level, "INFO")
             # Try to clean level from message if it appears at the start
             if message.upper().startswith(level_match.group(1).upper()):
-                message = message[len(level_match.group(1)):].strip()
-                if message.startswith('-') or message.startswith(':') or message.startswith('|'):
+                message = message[len(level_match.group(1)) :].strip()
+                if message.startswith("-") or message.startswith(":") or message.startswith("|"):
                     message = message[1:].strip()
 
         # Infer level from message keywords if not found
         if not level_match:
             msg_lower = line.lower()
-            if 'error' in msg_lower or 'fail' in msg_lower or 'exception' in msg_lower:
-                level = 'ERROR'
-            elif 'warn' in msg_lower:
-                level = 'WARNING'
-            elif 'debug' in msg_lower:
-                level = 'DEBUG'
+            if "error" in msg_lower or "fail" in msg_lower or "exception" in msg_lower:
+                level = "ERROR"
+            elif "warn" in msg_lower:
+                level = "WARNING"
+            elif "debug" in msg_lower:
+                level = "DEBUG"
 
         return LogEntry(
             timestamp=None,  # Would need parsing logic for each format
@@ -2122,16 +2061,17 @@ class UniversalFallbackParser(BaseParser):
             message=message if message else line,
             source=None,
             metadata={
-                'parser_type': 'fallback',  # Indicates fallback was used
-                'timestamp_raw': timestamp_str,
-                'timestamp_format': timestamp_format,
-            }
+                "parser_type": "fallback",  # Indicates fallback was used
+                "timestamp_raw": timestamp_str,
+                "timestamp_format": timestamp_format,
+            },
         )
 
 
 # =============================================================================
 # Custom Parser Registration
 # =============================================================================
+
 
 class CustomParserRegistry:
     """

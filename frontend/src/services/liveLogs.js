@@ -10,15 +10,15 @@ export class LiveLogService {
 
     /**
      * Connect to the WebSocket endpoint.
-     * @param {string} filePath - Absolute path to the log file.
+     * @param {string} analysisId - Analysis UUID to tail.
      * @param {string} [filter] - Optional regex filter.
      */
-    connect(filePath, filter = null) {
+    connect(analysisId, filter = null) {
         if (this.socket) {
             this.disconnect();
         }
 
-        const params = new URLSearchParams({ file: filePath });
+        const params = new URLSearchParams({ analysis_id: analysisId });
         if (filter) {
             params.append('filter', filter);
         }

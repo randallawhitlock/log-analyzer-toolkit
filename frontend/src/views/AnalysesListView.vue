@@ -209,7 +209,7 @@ const filterAnalyses = () => {
 
 const goToPage = (page) => {
   currentPage.value = page
-  loadAnalyses()
+  filterAnalyses()
 }
 
 const confirmDelete = async (analysis) => {

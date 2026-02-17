@@ -42,7 +42,7 @@ import { ref, onMounted, onUnmounted, watch, nextTick } from 'vue'
 import { LiveLogService } from '../services/liveLogs'
 
 const props = defineProps({
-  filePath: {
+  analysisId: {
     type: String,
     required: true
   }
@@ -56,7 +56,7 @@ const logContainer = ref(null)
 const service = new LiveLogService(import.meta.env.VITE_API_URL || 'http://localhost:8000')
 
 const connect = () => {
-  service.connect(props.filePath, filterInput.value)
+  service.connect(props.analysisId, filterInput.value)
 }
 
 const applyFilter = () => {
@@ -103,8 +103,8 @@ onUnmounted(() => {
   service.disconnect()
 })
 
-// Watch for file path changes
-watch(() => props.filePath, () => {
+// Watch for analysis ID changes
+watch(() => props.analysisId, () => {
   logs.value = []
   connect()
 })
