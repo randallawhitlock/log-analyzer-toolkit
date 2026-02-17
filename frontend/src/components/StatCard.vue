@@ -36,7 +36,7 @@ const props = defineProps({
   },
   format: {
     type: String,
-    default: null // 'number', 'percent', 'bytes'
+    default: null
   }
 })
 
@@ -44,15 +44,15 @@ const colorClass = computed(() => `color-${props.color}`)
 
 const formattedValue = computed(() => {
   const val = props.value
-  
+
   if (props.format === 'number' && typeof val === 'number') {
     return val.toLocaleString()
   }
-  
+
   if (props.format === 'percent' && typeof val === 'number') {
     return `${val.toFixed(1)}%`
   }
-  
+
   if (props.format === 'bytes' && typeof val === 'number') {
     const units = ['B', 'KB', 'MB', 'GB']
     let size = val
@@ -63,7 +63,7 @@ const formattedValue = computed(() => {
     }
     return `${size.toFixed(1)} ${units[unitIndex]}`
   }
-  
+
   return val
 })
 </script>
@@ -72,84 +72,67 @@ const formattedValue = computed(() => {
 .stat-card {
   display: flex;
   align-items: center;
-  gap: 12px;
+  gap: 14px;
   padding: 16px 20px;
-  background: var(--color-bg-secondary, #1a1a2e);
-  border-radius: 12px;
-  border: 1px solid var(--color-border, #3a3a55);
-  transition: all 0.2s ease;
+  background: var(--color-bg-secondary);
+  border-radius: var(--radius-lg);
+  border: 1px solid var(--color-border);
+  transition: all var(--transition-normal);
 }
 
 .stat-card:hover {
-  border-color: var(--color-border-hover, #5a5a7a);
-  transform: translateY(-2px);
+  border-color: var(--color-border-hover);
+  box-shadow: var(--shadow-sm);
 }
 
 .stat-icon {
-  font-size: 24px;
-  width: 48px;
-  height: 48px;
+  font-size: 20px;
+  width: 44px;
+  height: 44px;
   display: flex;
   align-items: center;
   justify-content: center;
-  background: var(--color-bg-tertiary, #2a2a4e);
-  border-radius: 10px;
+  background: var(--color-bg-tertiary);
+  border-radius: var(--radius-md);
+  flex-shrink: 0;
 }
 
 .stat-content {
   display: flex;
   flex-direction: column;
-  gap: 2px;
+  gap: 1px;
+  min-width: 0;
 }
 
 .stat-label {
-  font-size: 13px;
-  color: var(--color-text-muted, #888);
+  font-size: 11px;
+  color: var(--color-text-dim);
   text-transform: uppercase;
-  letter-spacing: 0.5px;
+  letter-spacing: 0.06em;
+  font-weight: 600;
 }
 
 .stat-value {
-  font-size: 24px;
+  font-size: 22px;
   font-weight: 700;
-  color: var(--color-text, #fff);
+  color: var(--color-text);
+  font-variant-numeric: tabular-nums;
+  letter-spacing: -0.02em;
 }
 
 .stat-subtitle {
-  font-size: 12px;
-  color: var(--color-text-dim, #666);
+  font-size: 11px;
+  color: var(--color-text-dim);
 }
 
 /* Color variants */
-.color-success .stat-value {
-  color: var(--color-success, #4caf50);
-}
+.color-success .stat-value { color: var(--color-success); }
+.color-warning .stat-value { color: var(--color-warning); }
+.color-error .stat-value { color: var(--color-error); }
+.color-info .stat-value { color: var(--color-info); }
 
-.color-warning .stat-value {
-  color: var(--color-warning, #ff9800);
-}
-
-.color-error .stat-value {
-  color: var(--color-error, #f44336);
-}
-
-.color-info .stat-value {
-  color: var(--color-info, #2196f3);
-}
-
-.color-success .stat-icon {
-  background: rgba(76, 175, 80, 0.15);
-}
-
-.color-warning .stat-icon {
-  background: rgba(255, 152, 0, 0.15);
-}
-
-.color-error .stat-icon {
-  background: rgba(244, 67, 54, 0.15);
-}
-
-.color-info .stat-icon {
-  background: rgba(33, 150, 243, 0.15);
-}
+.color-success .stat-icon { background: var(--color-success-light); }
+.color-warning .stat-icon { background: var(--color-warning-light); }
+.color-error .stat-icon { background: var(--color-error-light); }
+.color-info .stat-icon { background: var(--color-info-light); }
 </style>

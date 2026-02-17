@@ -14,32 +14,47 @@
         accept=".log,.txt,.json"
         hidden
       />
-      
+
       <div v-if="uploading" class="upload-progress">
-        <div class="spinner"></div>
-        <p>Analyzing {{ fileName }}...</p>
-        <div class="progress-bar">
-          <div class="progress-fill" :style="{ width: uploadProgress + '%' }"></div>
+        <div class="progress-ring">
+          <svg viewBox="0 0 48 48">
+            <circle cx="24" cy="24" r="20" fill="none" stroke="var(--color-border)" stroke-width="3"/>
+            <circle cx="24" cy="24" r="20" fill="none" stroke="var(--color-primary)" stroke-width="3"
+              stroke-linecap="round"
+              :stroke-dasharray="126"
+              :stroke-dashoffset="126 - (126 * Math.min(uploadProgress, 100)) / 100"
+              style="transform: rotate(-90deg); transform-origin: center; transition: stroke-dashoffset 0.3s ease;"
+            />
+          </svg>
         </div>
+        <p class="upload-status">Analyzing <strong>{{ fileName }}</strong></p>
+        <p class="upload-percent">{{ Math.round(uploadProgress) }}%</p>
       </div>
-      
+
       <div v-else class="upload-prompt">
-        <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor">
-          <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" 
-                d="M7 16a4 4 0 01-.88-7.903A5 5 0 1115.9 6L16 6a5 5 0 011 9.9M15 13l-3-3m0 0l-3 3m3-3v12" />
-        </svg>
+        <div class="upload-icon-wrapper">
+          <svg class="upload-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5" stroke-linecap="round">
+            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+            <polyline points="17 8 12 3 7 8"/>
+            <line x1="12" y1="3" x2="12" y2="15"/>
+          </svg>
+        </div>
         <button @click="$refs.fileInput.click()" class="upload-btn">
           Choose File
         </button>
         <p class="upload-hint">or drag and drop a log file here</p>
-        <p class="supported-formats">Supports: .log, .txt, .json (up to 100MB)</p>
+        <p class="supported-formats">.log, .txt, .json up to 100 MB</p>
       </div>
     </div>
-    
+
     <div v-if="error" class="error-message">
-      <span class="error-icon">⚠️</span>
-      {{ error }}
-      <button @click="error = null" class="dismiss-btn">×</button>
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round">
+        <circle cx="12" cy="12" r="10"/>
+        <line x1="12" y1="8" x2="12" y2="12"/>
+        <line x1="12" y1="16" x2="12.01" y2="16"/>
+      </svg>
+      <span>{{ error }}</span>
+      <button @click="error = null" class="dismiss-btn">&times;</button>
     </div>
   </div>
 </template>
@@ -60,32 +75,26 @@ const fileName = ref('')
 const uploadProgress = ref(0)
 const error = ref(null)
 
-const MAX_FILE_SIZE = 100 * 1024 * 1024 // 100MB
+const MAX_FILE_SIZE = 100 * 1024 * 1024
 
-/**
- * Validate file before upload
- */
 const validateFile = (file) => {
   if (!file) {
     throw new Error('No file selected')
   }
-  
+
   if (file.size > MAX_FILE_SIZE) {
     throw new Error(`File too large. Maximum size is ${MAX_FILE_SIZE / (1024 * 1024)}MB`)
   }
-  
+
   const allowedTypes = ['.log', '.txt', '.json']
   const ext = '.' + file.name.split('.').pop().toLowerCase()
   if (!allowedTypes.includes(ext)) {
     throw new Error(`Invalid file type. Supported: ${allowedTypes.join(', ')}`)
   }
-  
+
   return true
 }
 
-/**
- * Handle file selection from input
- */
 const handleFileSelect = async (event) => {
   const file = event.target.files[0]
   if (file) {
@@ -93,9 +102,6 @@ const handleFileSelect = async (event) => {
   }
 }
 
-/**
- * Handle drag-and-drop
- */
 const handleDrop = async (event) => {
   isDragging.value = false
   const file = event.dataTransfer.files[0]
@@ -104,43 +110,37 @@ const handleDrop = async (event) => {
   }
 }
 
-/**
- * Upload and analyze file
- */
 const uploadFile = async (file) => {
   try {
     validateFile(file)
-    
+
     uploading.value = true
     fileName.value = file.name
     uploadProgress.value = 0
     error.value = null
-    
-    // Simulate progress (actual upload doesn't provide progress easily)
+
     const progressInterval = setInterval(() => {
       if (uploadProgress.value < 90) {
         uploadProgress.value += Math.random() * 15
       }
     }, 200)
-    
+
     const result = await analyzeLog(file)
-    
+
     clearInterval(progressInterval)
     uploadProgress.value = 100
-    
+
     emit('upload-complete', result)
-    
-    // Navigate to analysis page
+
     setTimeout(() => {
       router.push({ name: 'analysis', params: { id: result.id } })
     }, 500)
-    
+
   } catch (err) {
     error.value = err.message || 'Upload failed'
     emit('upload-error', err)
   } finally {
     uploading.value = false
-    // Reset file input
     if (fileInput.value) {
       fileInput.value.value = ''
     }
@@ -151,113 +151,126 @@ const uploadFile = async (file) => {
 <style scoped>
 .upload-container {
   width: 100%;
-  max-width: 600px;
+  max-width: 560px;
   margin: 0 auto;
 }
 
 .drop-zone {
-  border: 2px dashed var(--color-border, #3a3a55);
-  border-radius: 12px;
-  padding: 48px 24px;
+  border: 2px dashed var(--color-border);
+  border-radius: var(--radius-xl);
+  padding: var(--spacing-2xl) var(--spacing-lg);
   text-align: center;
-  transition: all 0.3s ease;
-  background: var(--color-bg-secondary, #1a1a2e);
+  transition: all var(--transition-normal);
+  background: var(--color-bg-secondary);
   cursor: pointer;
 }
 
 .drop-zone:hover {
-  border-color: var(--color-primary, #646cff);
-  background: var(--color-bg-hover, #2a2a4e);
+  border-color: var(--color-border-hover);
+  background: var(--color-bg-hover);
 }
 
 .drop-zone.drag-over {
-  border-color: var(--color-primary, #646cff);
-  background: var(--color-bg-hover, #2a2a4e);
-  transform: scale(1.02);
+  border-color: var(--color-primary);
+  background: var(--color-primary-light);
+  transform: scale(1.01);
 }
 
 .drop-zone.uploading {
   pointer-events: none;
+  border-style: solid;
+  border-color: var(--color-primary);
+}
+
+.upload-icon-wrapper {
+  margin-bottom: var(--spacing-md);
 }
 
 .upload-icon {
-  width: 64px;
-  height: 64px;
-  color: var(--color-text-muted, #888);
-  margin-bottom: 16px;
+  width: 48px;
+  height: 48px;
+  color: var(--color-text-dim);
 }
 
 .upload-btn {
-  background: var(--color-primary, #646cff);
+  background: var(--color-primary);
   color: white;
   border: none;
-  padding: 12px 32px;
-  border-radius: 8px;
-  font-size: 16px;
+  padding: 10px 28px;
+  border-radius: var(--radius-full);
+  font-size: 14px;
   font-weight: 600;
   cursor: pointer;
-  transition: all 0.2s ease;
+  transition: all var(--transition-fast);
 }
 
 .upload-btn:hover {
-  background: var(--color-primary-hover, #535bf2);
-  transform: translateY(-2px);
+  background: var(--color-primary-hover);
+  transform: translateY(-1px);
+  box-shadow: var(--shadow-md);
 }
 
 .upload-hint {
   margin-top: 12px;
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
+  font-size: 13px;
 }
 
 .supported-formats {
-  margin-top: 8px;
-  font-size: 12px;
-  color: var(--color-text-dim, #666);
+  margin-top: 4px;
+  font-size: 11px;
+  color: var(--color-text-dim);
 }
 
+/* Upload Progress */
 .upload-progress {
-  padding: 24px;
+  padding: var(--spacing-lg);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 12px;
 }
 
-.spinner {
-  width: 48px;
-  height: 48px;
-  border: 4px solid var(--color-border, #3a3a55);
-  border-top-color: var(--color-primary, #646cff);
-  border-radius: 50%;
-  animation: spin 1s linear infinite;
-  margin: 0 auto 16px;
+.progress-ring {
+  width: 56px;
+  height: 56px;
 }
 
-@keyframes spin {
-  to { transform: rotate(360deg); }
-}
-
-.progress-bar {
-  height: 8px;
-  background: var(--color-bg-tertiary, #2a2a4e);
-  border-radius: 4px;
-  overflow: hidden;
-  margin-top: 16px;
-}
-
-.progress-fill {
+.progress-ring svg {
+  width: 100%;
   height: 100%;
-  background: linear-gradient(90deg, var(--color-primary, #646cff), var(--color-success, #4caf50));
-  border-radius: 4px;
-  transition: width 0.3s ease;
 }
 
+.upload-status {
+  margin: 0;
+  font-size: 14px;
+  color: var(--color-text-muted);
+}
+
+.upload-status strong {
+  color: var(--color-text);
+}
+
+.upload-percent {
+  margin: 0;
+  font-size: 24px;
+  font-weight: 700;
+  color: var(--color-primary);
+  font-variant-numeric: tabular-nums;
+}
+
+/* Error */
 .error-message {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-top: 16px;
-  padding: 12px 16px;
-  background: var(--color-error-bg, rgba(244, 67, 54, 0.1));
-  border: 1px solid var(--color-error, #f44336);
-  border-radius: 8px;
-  color: var(--color-error, #f44336);
+  margin-top: 12px;
+  padding: 10px 14px;
+  background: var(--color-error-bg);
+  border: 1px solid rgba(239, 68, 68, 0.25);
+  border-radius: var(--radius-md);
+  color: var(--color-error);
+  font-size: 13px;
 }
 
 .dismiss-btn {
@@ -268,5 +281,10 @@ const uploadFile = async (file) => {
   cursor: pointer;
   font-size: 18px;
   padding: 0 4px;
+  opacity: 0.7;
+}
+
+.dismiss-btn:hover {
+  opacity: 1;
 }
 </style>

@@ -50,74 +50,86 @@ onMounted(async () => {
 
 <style scoped>
 .upload-view {
-  max-width: 800px;
+  max-width: 720px;
   margin: 0 auto;
-  padding: 40px 24px;
+  padding: var(--spacing-2xl) var(--spacing-lg);
 }
 
 .page-header {
   text-align: center;
-  margin-bottom: 40px;
+  margin-bottom: var(--spacing-2xl);
 }
 
 .back-link {
   display: inline-block;
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
   text-decoration: none;
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
+  font-size: 13px;
 }
 
 .back-link:hover {
-  color: var(--color-primary, #646cff);
+  color: var(--color-primary);
 }
 
 .page-header h1 {
-  margin: 0 0 12px 0;
-  font-size: 2rem;
+  margin: 0 0 8px 0;
+  font-size: 1.75rem;
 }
 
 .page-subtitle {
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
   margin: 0;
+  font-size: 14px;
 }
 
 .formats-section {
-  margin-top: 64px;
+  margin-top: var(--spacing-3xl);
 }
 
 .formats-section h2 {
   text-align: center;
-  margin-bottom: 24px;
+  margin-bottom: var(--spacing-lg);
+  font-size: 1.25rem;
 }
 
 .formats-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(180px, 1fr));
-  gap: 12px;
+  grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+  gap: 10px;
 }
 
 .format-card {
-  background: var(--color-bg-secondary, #1a1a2e);
-  border: 1px solid var(--color-border, #3a3a55);
-  border-radius: 8px;
-  padding: 12px 16px;
+  background: var(--color-bg-secondary);
+  border: 1px solid var(--color-border);
+  border-radius: var(--radius-md);
+  padding: 10px 14px;
+  transition: all var(--transition-fast);
+}
+
+.format-card:hover {
+  border-color: var(--color-border-hover);
 }
 
 .format-card h3 {
-  margin: 0 0 6px 0;
-  font-size: 14px;
+  margin: 0 0 4px 0;
+  font-size: 12px;
   text-transform: uppercase;
-  color: var(--color-primary, #646cff);
+  color: var(--color-primary);
+  letter-spacing: 0.04em;
+  font-weight: 700;
 }
 
 .format-card p {
   margin: 0;
-  font-size: 12px;
-  color: var(--color-text-muted, #888);
+  font-size: 11px;
+  color: var(--color-text-muted);
+  line-height: 1.4;
 }
 
 .loading-formats {
   text-align: center;
-  color: var(--color-text-muted, #888);
+  color: var(--color-text-muted);
+  font-size: 13px;
 }
 </style>
