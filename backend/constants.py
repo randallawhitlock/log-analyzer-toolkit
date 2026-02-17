@@ -24,3 +24,6 @@ MIN_PAGE_SIZE = 1  # Minimum results per page
 
 # Upload directory
 UPLOAD_DIRECTORY = "./uploads"  # Directory for uploaded log files
+
+# Authentication
+LOG_ANALYZER_API_KEY = "LOG_ANALYZER_API_KEY"  # Env var name for API key

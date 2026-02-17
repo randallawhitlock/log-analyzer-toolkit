@@ -64,7 +64,6 @@ class AnalysisResponse(BaseModel):
     earliest_timestamp: Optional[datetime] = None
     latest_timestamp: Optional[datetime] = None
     time_span: Optional[str] = None
-    file_path: Optional[str] = None
     created_at: datetime
 
 

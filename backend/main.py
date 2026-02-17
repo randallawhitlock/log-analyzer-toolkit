@@ -18,6 +18,9 @@ from datetime import datetime  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
+from slowapi import Limiter, _rate_limit_exceeded_handler  # noqa: E402
+from slowapi.errors import RateLimitExceeded  # noqa: E402
+from slowapi.util import get_remote_address  # noqa: E402
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.types import ASGIApp  # noqa: E402
 
@@ -28,6 +31,9 @@ from backend.logging_middleware import StructuredLoggingMiddleware  # noqa: E402
 
 logger = logging.getLogger(__name__)
 
+# Rate limiter: 60 requests/minute per IP by default
+limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
+
 # Create FastAPI app
 app = FastAPI(
     title="Log Analyzer Toolkit API",
@@ -36,6 +42,10 @@ app = FastAPI(
     docs_url="/docs",
     redoc_url="/redoc",
 )
+
+# Rate limiting
+app.state.limiter = limiter
+app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 
 # Configure CORS
 app.add_middleware(
@@ -46,8 +56,8 @@ app.add_middleware(
         "http://localhost:8080",  # Another common port
     ],
     allow_credentials=True,
-    allow_methods=["*"],  # Allow all HTTP methods
-    allow_headers=["*"],  # Allow all headers
+    allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
+    allow_headers=["Content-Type", "X-API-Key", "Authorization"],
 )
 
 

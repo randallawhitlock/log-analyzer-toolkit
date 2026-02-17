@@ -1,4 +1,4 @@
-FROM node:20-alpine
+FROM node:20-alpine AS build
 
 WORKDIR /app
 
@@ -6,11 +6,26 @@ WORKDIR /app
 COPY frontend/package*.json ./
 
 # Install dependencies
-RUN npm install
+RUN npm ci
 
 # Copy frontend code
 COPY frontend/ .
 
-EXPOSE 5173
+# Build for production
+RUN npm run build
 
-CMD ["npm", "run", "dev", "--", "--host", "0.0.0.0"]
+# Production stage
+FROM nginx:alpine
+
+COPY --from=build /app/dist /usr/share/nginx/html
+
+# Add non-root user
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    chown -R appuser:appgroup /usr/share/nginx/html /var/cache/nginx /var/log/nginx && \
+    touch /var/run/nginx.pid && chown appuser:appgroup /var/run/nginx.pid
+
+USER appuser
+
+EXPOSE 80
+
+CMD ["nginx", "-g", "daemon off;"]
