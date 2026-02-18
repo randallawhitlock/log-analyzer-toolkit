@@ -8,13 +8,11 @@ import logging
 import uuid as uuid_module
 from typing import Optional
 
-from fastapi import APIRouter, Depends, File, HTTPException, Query, Request, UploadFile
-from slowapi import Limiter
-from slowapi.util import get_remote_address
+from fastapi import APIRouter, BackgroundTasks, Depends, File, HTTPException, Query, Request, UploadFile
 from sqlalchemy.orm import Session
 
 from backend.api import schemas
-from backend.api.deps import get_api_key
+from backend.api.deps import get_analyzer_service, get_api_key
 from backend.constants import (
     DEFAULT_MAX_ERRORS,
     DEFAULT_PAGE_SIZE,
@@ -25,15 +23,13 @@ from backend.constants import (
 )
 from backend.db import crud
 from backend.db.database import get_db
+from backend.rate_limit import limiter
 from backend.services.analyzer_service import AnalyzerService
 from backend.services.triage_service import TriageService
 from log_analyzer.ai_providers.base import ProviderNotAvailableError
 from log_analyzer.analyzer import AVAILABLE_PARSERS
 
 logger = logging.getLogger(__name__)
-
-# Stricter rate limit for AI-powered endpoints
-limiter = Limiter(key_func=get_remote_address)
 
 router = APIRouter(
     prefix="/api/v1",
@@ -54,8 +50,9 @@ def _validate_uuid(value: str, name: str = "ID") -> str:
 # ==================== Analysis Endpoints ====================
 
 
-@router.post("/analyze", response_model=schemas.AnalysisResponse, status_code=201)
+@router.post("/analyze", response_model=schemas.AnalysisResponse)
 async def analyze_log_file(
+    background_tasks: BackgroundTasks,
     file: UploadFile = File(..., description="Log file to analyze"),
     format: str = Query("auto", description="Log format (currently only 'auto' supported)"),
     max_errors: int = Query(
@@ -64,26 +61,42 @@ async def analyze_log_file(
         le=MAX_ERRORS_LIMIT,
         description=f"Maximum errors to collect ({MIN_ERRORS_LIMIT}-{MAX_ERRORS_LIMIT})",
     ),
+    sync: bool = Query(False, description="Run analysis synchronously (default: background)"),
     db: Session = Depends(get_db),
+    service: AnalyzerService = Depends(get_analyzer_service),
 ):
     """
     Upload and analyze a log file.
 
-    **Parameters:**
-    - **file**: Log file to upload (multipart/form-data)
-    - **format**: Log format detection mode (default: 'auto')
-    - **max_errors**: Maximum number of errors/warnings to collect (1-1000)
-
-    **Returns:**
-    - Analysis results with statistics, errors, and metadata
+    By default runs analysis in the background (returns 202 with pending status).
+    Pass ``?sync=true`` for synchronous analysis (returns 201 with completed results).
     """
-    logger.info(f"POST /api/v1/analyze - file={file.filename}, format={format}, max_errors={max_errors}")
+    logger.info(f"POST /api/v1/analyze - file={file.filename}, format={format}, max_errors={max_errors}, sync={sync}")
 
     try:
-        service = AnalyzerService()
-        analysis = await service.analyze_uploaded_file(file, db, max_errors=max_errors, log_format=format)
-        logger.info(f"Analysis created successfully: {analysis.id}")
-        return analysis
+        if sync:
+            # Synchronous path – backward compatible
+            analysis = await service.analyze_uploaded_file(file, db, max_errors=max_errors, log_format=format)
+            logger.info(f"Analysis created successfully: {analysis.id}")
+            from starlette.responses import JSONResponse as StarletteJSONResponse
+
+            return StarletteJSONResponse(
+                status_code=201,
+                content=schemas.AnalysisResponse.model_validate(analysis).model_dump(mode="json"),
+            )
+
+        # Async path – save file, create pending record, enqueue background work
+        file_path = await service.save_uploaded_file(file)
+        analysis = service.create_pending_analysis(db, file.filename, file_path)
+        background_tasks.add_task(service.process_analysis_background, analysis.id, file_path, max_errors)
+        logger.info(f"Analysis {analysis.id} queued for background processing")
+
+        from starlette.responses import JSONResponse as StarletteJSONResponse
+
+        return StarletteJSONResponse(
+            status_code=202,
+            content=schemas.AnalysisResponse.model_validate(analysis).model_dump(mode="json"),
+        )
 
     except ValueError as e:
         logger.warning(f"Invalid request for {file.filename}: {e}")
@@ -150,7 +163,11 @@ def get_analysis(analysis_id: str, db: Session = Depends(get_db)):
 
 
 @router.delete("/analysis/{analysis_id}", response_model=schemas.SuccessResponse)
-def delete_analysis(analysis_id: str, db: Session = Depends(get_db)):
+def delete_analysis(
+    analysis_id: str,
+    db: Session = Depends(get_db),
+    service: AnalyzerService = Depends(get_analyzer_service),
+):
     """
     Delete an analysis and its associated file.
 
@@ -169,7 +186,6 @@ def delete_analysis(analysis_id: str, db: Session = Depends(get_db)):
         raise HTTPException(status_code=404, detail=f"Analysis {analysis_id} not found")
 
     # Delete file from disk
-    service = AnalyzerService()
     service.delete_file(analysis.file_path)
 
     # Delete from database
