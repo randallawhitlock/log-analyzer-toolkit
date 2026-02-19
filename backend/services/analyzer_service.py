@@ -245,6 +245,12 @@ class AnalyzerService:
                     db.commit()
             except Exception:
                 logger.error(f"Failed to mark analysis {analysis_id} as failed", exc_info=True)
+
+            # Clean up the orphaned log file
+            try:
+                self.delete_file(file_path)
+            except Exception as delete_error:
+                logger.error(f"Failed to delete orphaned file {file_path}: {delete_error}")
         finally:
             db.close()
 
