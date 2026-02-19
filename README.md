@@ -167,6 +167,18 @@ make lint       # Check code style
 make clean      # Remove build artifacts
 ```
 
+### Step 4.5: API Documentation
+
+The backend provides interactive API documentation powered by FastAPI:
+
+| Documentation | URL | Description |
+|:---|:---|:---|
+| **Swagger UI** | [http://localhost:8000/docs](http://localhost:8000/docs) | Interactive API explorer with "Try it out" functionality |
+| **ReDoc** | [http://localhost:8000/redoc](http://localhost:8000/redoc) | Clean, readable API reference documentation |
+| **OpenAPI Schema** | [http://localhost:8000/openapi.json](http://localhost:8000/openapi.json) | Raw OpenAPI 3.0 specification (JSON) |
+
+> **Note:** Start the backend server first with `make run` or `./run_dev.sh` before accessing the documentation URLs.
+
 ### Step 5: Python Integration
 
 Integrate the analyzer directly into your monitoring scripts or dashboards.
