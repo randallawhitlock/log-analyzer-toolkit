@@ -27,9 +27,11 @@ from starlette.types import ASGIApp  # noqa: E402
 from backend.api.schemas import HealthResponse  # noqa: E402
 from backend.constants import MAX_UPLOAD_SIZE_BYTES, MAX_UPLOAD_SIZE_MB  # noqa: E402
 from backend.db.database import init_db  # noqa: E402
+from backend.logging_config import setup_logging  # noqa: E402
 from backend.logging_middleware import StructuredLoggingMiddleware  # noqa: E402
 from backend.rate_limit import limiter  # noqa: E402
 
+setup_logging()
 logger = logging.getLogger(__name__)
 
 
