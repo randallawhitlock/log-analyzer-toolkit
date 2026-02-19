@@ -31,7 +31,7 @@
             📥 Export
           </button>
           <button @click="toggleLiveTail" class="live-btn" :class="{ active: showLiveTail }">
-            🔴 Live Tail
+            {{ showLiveTail ? '✕ Close Viewer' : '▶ Log Viewer' }}
           </button>
           <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn">
             <span v-if="triageLoading" class="btn-spinner"></span>
@@ -75,7 +75,7 @@
 
       <!-- Live Log Viewer -->
       <section v-if="showLiveTail" class="panel live-section">
-        <LiveLogViewer :file-path="analysis.file_path" />
+        <LiveLogViewer :analysis-id="analysis.id" />
       </section>
 
       <!-- Main Content Grid -->
@@ -239,6 +239,7 @@ const {
   runTriage,
   getTriagesForAnalysis,
   deepDiveIssue,
+  getLogPreview,
   loading,
   error
 } = useApi()
@@ -399,17 +400,19 @@ const toggleSample = () => {
 }
 
 /**
- * Load sample log lines (simulated - in real app would call backend)
+ * Load sample log lines from the backend preview endpoint.
  */
-const loadLogSamples = () => {
+const loadLogSamples = async () => {
   loadingSamples.value = true
-  // Simulate loading - in production, this would fetch from backend
-  setTimeout(() => {
-    // Use top_errors as sample data since we don't have raw lines endpoint
-    const samples = analysis.value?.top_errors?.slice(0, 10).map(e => e[0]) || []
-    logSamples.value = samples.length > 0 ? samples : ['No sample log lines available']
+  try {
+    const data = await getLogPreview(route.params.id, 50)
+    logSamples.value = data.lines.length > 0 ? data.lines : ['No sample log lines available']
+  } catch (err) {
+    console.error('Failed to load log samples:', err)
+    logSamples.value = ['Failed to load log samples']
+  } finally {
     loadingSamples.value = false
-  }, 300)
+  }
 }
 
 const toggleLiveTail = () => {
@@ -423,7 +426,7 @@ onMounted(async () => {
     // Check for existing triages
     const triages = await getTriagesForAnalysis(route.params.id)
     if (triages && triages.length > 0) {
-      triage.value = triages[triages.length - 1] // Most recent
+      triage.value = triages[0] // Most recent (API returns newest first)
     }
   } catch (err) {
     console.error('Failed to load analysis:', err)

@@ -216,6 +216,24 @@ export function useApi() {
     }
 
     /**
+     * Get a preview of raw log file lines for an analysis.
+     * @param {string} analysisId - Analysis UUID
+     * @param {number} lines - Number of lines to return (default: 50)
+     * @returns {Promise<Object>} Log preview with lines array
+     */
+    const getLogPreview = async (analysisId, lines = 50) => {
+        try {
+            const response = await apiClient.get(`/api/v1/analysis/${analysisId}/preview`, {
+                params: { lines }
+            })
+            return response.data
+        } catch (err) {
+            error.value = err.response?.data?.detail || err.message
+            throw err
+        }
+    }
+
+    /**
      * Run a deep dive analysis on a specific triage issue.
      * @param {Object} issueData - Issue context for deep dive
      * @returns {Promise<Object>} Detailed analysis result
@@ -242,6 +260,7 @@ export function useApi() {
         getTriagesForAnalysis,
         getFormats,
         checkHealth,
-        deepDiveIssue
+        deepDiveIssue,
+        getLogPreview
     }
 }

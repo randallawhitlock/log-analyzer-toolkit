@@ -194,6 +194,51 @@ def delete_analysis(
     return schemas.SuccessResponse(message=f"Analysis {analysis_id} deleted successfully")
 
 
+@router.get("/analysis/{analysis_id}/preview", response_model=schemas.LogPreviewResponse)
+def get_log_preview(
+    analysis_id: str,
+    lines: int = Query(50, ge=1, le=500, description="Number of lines to return (1-500)"),
+    db: Session = Depends(get_db),
+):
+    """
+    Get a preview of the raw log file lines for an analysis.
+
+    **Parameters:**
+    - **analysis_id**: UUID of the analysis
+    - **lines**: Number of lines to return (default: 50, max: 500)
+
+    **Returns:**
+    - First N lines of the original log file
+    """
+    _validate_uuid(analysis_id, "analysis_id")
+    analysis = crud.get_analysis(db, analysis_id)
+    if not analysis:
+        raise HTTPException(status_code=404, detail=f"Analysis {analysis_id} not found")
+
+    from pathlib import Path
+
+    file_path = Path(analysis.file_path)
+    if not file_path.exists():
+        raise HTTPException(status_code=404, detail="Log file no longer exists on disk")
+
+    try:
+        result_lines = []
+        with open(file_path, errors="replace") as f:
+            for i, line in enumerate(f):
+                if i >= lines:
+                    break
+                result_lines.append(line.rstrip("\n\r"))
+
+        return schemas.LogPreviewResponse(
+            analysis_id=analysis_id,
+            lines=result_lines,
+            total_lines_returned=len(result_lines),
+        )
+    except Exception as e:
+        logger.error(f"Error reading log file for preview: {e}")
+        raise HTTPException(status_code=500, detail="Failed to read log file") from e
+
+
 # ==================== Triage Endpoints ====================
 
 
