@@ -53,11 +53,21 @@ class AnalyzerService:
         file_extension = raw_ext if raw_ext and raw_ext[1:].isalnum() else ".log"
         file_path = os.path.join(UPLOAD_DIRECTORY, f"{file_id}{file_extension}")
 
-        # Save file asynchronously
+        from fastapi import HTTPException
+
+        from backend.constants import MAX_UPLOAD_SIZE_BYTES, MAX_UPLOAD_SIZE_MB
+
+        file_size = 0
         async with aiofiles.open(file_path, "wb") as out_file:
-            content = await file.read()
-            file_size = len(content)
-            await out_file.write(content)
+            while chunk := await file.read(1024 * 1024):  # 1MB chunks
+                file_size += len(chunk)
+                if file_size > MAX_UPLOAD_SIZE_BYTES:
+                    # Clean up file and abort
+                    os.remove(file_path)
+                    raise HTTPException(
+                        status_code=413, detail=f"File too large. Maximum size is {MAX_UPLOAD_SIZE_MB}MB"
+                    )
+                await out_file.write(chunk)
 
         logger.info(f"Saved file {file.filename} ({file_size:,} bytes) to {file_path}")
         return file_path
