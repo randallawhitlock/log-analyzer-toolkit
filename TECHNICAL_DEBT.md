@@ -20,7 +20,7 @@ This document tracks technical debt, known issues, and planned refactoring tasks
 - [ ] **Config**: Unify configuration management (currently split between env vars and constants).
 
 ### Documentation
-- [ ] **API**: Add interactive redoc/swagger documentation links in README.
+- [x] **API**: Add interactive redoc/swagger documentation links in README.
 
 ## 📉 Low Priority / Future
 - [ ] **Performance**: Redis caching for frequent analysis requests.
