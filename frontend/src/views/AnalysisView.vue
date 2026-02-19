@@ -207,11 +207,23 @@
         </div>
       </section>
     </div>
+
+    <!-- Custom Delete Modal -->
+    <div v-if="showDeleteModal" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Confirm Deletion</h3>
+        <p>Are you sure you want to delete this analysis?</p>
+        <div class="modal-actions">
+          <button @click="showDeleteModal = false" class="cancel-btn">Cancel</button>
+          <button @click="executeDelete" class="confirm-btn">Delete</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
 <script setup>
-import { ref, computed, onMounted } from 'vue'
+import { ref, computed, onMounted, onUnmounted } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { marked } from 'marked'
 import DOMPurify from 'dompurify'
@@ -253,6 +265,8 @@ const loadingSamples = ref(false)
 const logSamples = ref([])
 const deepDiveLoading = ref({})
 const deepDiveResults = ref({})
+const showDeleteModal = ref(false)
+let pollInterval = null
 
 const topErrors = computed(() => {
   return analysis.value?.top_errors?.slice(0, 10) || []
@@ -337,11 +351,14 @@ const runDeepDive = async (idx, issue) => {
   }
 }
 
-const deleteCurrentAnalysis = async () => {
-  if (!confirm('Are you sure you want to delete this analysis?')) return
+const deleteCurrentAnalysis = () => {
+  showDeleteModal.value = true
+}
 
+const executeDelete = async () => {
   try {
     await deleteAnalysis(route.params.id)
+    showDeleteModal.value = false
     router.push('/')
   } catch (err) {
     console.error('Delete failed:', err)
@@ -423,6 +440,20 @@ onMounted(async () => {
   try {
     analysis.value = await getAnalysis(route.params.id)
 
+    if (analysis.value?.detected_format === 'pending') {
+      pollInterval = setInterval(async () => {
+        try {
+          const updated = await getAnalysis(route.params.id)
+          if (updated.detected_format !== 'pending') {
+            analysis.value = updated
+            clearInterval(pollInterval)
+          }
+        } catch (e) {
+          console.error('Polling failed', e)
+        }
+      }, 2000)
+    }
+
     // Check for existing triages
     const triages = await getTriagesForAnalysis(route.params.id)
     if (triages && triages.length > 0) {
@@ -431,6 +462,10 @@ onMounted(async () => {
   } catch (err) {
     console.error('Failed to load analysis:', err)
   }
+})
+
+onUnmounted(() => {
+  if (pollInterval) clearInterval(pollInterval)
 })
 </script>
 
