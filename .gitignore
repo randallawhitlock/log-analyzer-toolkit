@@ -30,5 +30,6 @@ Thumbs.db
 
 # Application Data
 log_analyzer.db
+test_migration.db
 uploads/
 .env

@@ -5,7 +5,7 @@ This document tracks technical debt, known issues, and planned refactoring tasks
 ## 🚧 High Priority
 
 ### Backend
-- [ ] **Database**: Add migrations (Alembic) management.
+- [x] **Database**: Add migrations (Alembic) management.
 - [ ] **Security**: API Key validation is basic; consider JWT or OAuth2.
 - [ ] **Testing**: Increase coverage for `backend/api/deps.py` and `backend/main.py` (currently < 80%).
 

@@ -4,17 +4,21 @@ Database connection and session management.
 Provides SQLAlchemy engine, session factory, and base model class.
 """
 
+import os
+
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-# SQLite database URL (will be in root directory for now)
-SQLALCHEMY_DATABASE_URL = "sqlite:///./log_analyzer.db"
+# Database URL: configurable via env var, defaults to SQLite for dev
+DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./log_analyzer.db")
+
+# SQLite needs check_same_thread=False; PostgreSQL does not
+connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
 
 # Create engine
-# connect_args only needed for SQLite
 engine = create_engine(
-    SQLALCHEMY_DATABASE_URL,
-    connect_args={"check_same_thread": False},
+    DATABASE_URL,
+    connect_args=connect_args,
     echo=False,  # Set to True for SQL query logging
 )
 
@@ -33,11 +37,6 @@ def get_db():
 
     Yields:
         Session: SQLAlchemy database session
-
-    Usage in FastAPI:
-        @app.get("/items/")
-        def read_items(db: Session = Depends(get_db)):
-            return db.query(Item).all()
     """
     db = SessionLocal()
     try:
