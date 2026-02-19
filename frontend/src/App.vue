@@ -12,10 +12,10 @@
         <span class="brand-text">Log Analyzer <span class="brand-accent">Pro</span></span>
       </router-link>
 
-      <div class="nav-links">
-        <router-link to="/" class="nav-link" exact-active-class="active">Home</router-link>
-        <router-link to="/analyses" class="nav-link" active-class="active">Analyses</router-link>
-        <router-link to="/upload" class="nav-link upload-link">
+      <div class="nav-links" role="navigation" aria-label="Main Navigation">
+        <router-link to="/" class="nav-link" exact-active-class="active" aria-label="Home">Home</router-link>
+        <router-link to="/analyses" class="nav-link" active-class="active" aria-label="Analyses">Analyses</router-link>
+        <router-link to="/upload" class="nav-link upload-link" aria-label="Upload Log File">
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5" stroke-linecap="round">
             <path d="M12 5v14M5 12h14"/>
           </svg>
@@ -26,7 +26,11 @@
     </nav>
 
     <main class="main-content">
-      <router-view />
+      <router-view v-slot="{ Component }">
+        <transition name="page" mode="out-in">
+          <component :is="Component" />
+        </transition>
+      </router-view>
     </main>
 
     <footer class="main-footer">
@@ -51,14 +55,16 @@ import ThemeToggle from './components/ThemeToggle.vue'
   justify-content: space-between;
   align-items: center;
   padding: 0 var(--spacing-lg);
-  height: 56px;
+  height: 64px; /* Slightly taller for breathing room */
   background: var(--glass-bg);
   backdrop-filter: var(--glass-blur);
   -webkit-backdrop-filter: var(--glass-blur);
   border-bottom: 1px solid var(--glass-border);
+  box-shadow: 0 4px 30px rgba(0, 0, 0, 0.1);
   position: sticky;
   top: 0;
   z-index: 100;
+  transition: all var(--transition-normal);
 }
 
 .nav-brand {
@@ -98,12 +104,12 @@ import ThemeToggle from './components/ThemeToggle.vue'
 }
 
 .nav-link {
-  padding: 6px 14px;
+  padding: 8px 16px;
   text-decoration: none;
   color: var(--color-text-muted);
-  border-radius: var(--radius-md);
+  border-radius: var(--radius-full);
   font-weight: 500;
-  font-size: 13px;
+  font-size: 0.875rem;
   transition: all var(--transition-fast);
 }
 
@@ -115,6 +121,7 @@ import ThemeToggle from './components/ThemeToggle.vue'
 .nav-link.active {
   color: var(--color-primary);
   background: var(--color-primary-light);
+  font-weight: 600;
 }
 
 .upload-link {
@@ -141,13 +148,16 @@ import ThemeToggle from './components/ThemeToggle.vue'
 
 .main-footer {
   text-align: center;
-  padding: var(--spacing-lg);
+  padding: var(--spacing-xl) var(--spacing-lg);
   color: var(--color-text-dim);
-  font-size: 12px;
-  border-top: 1px solid var(--color-border);
+  font-size: 0.8125rem;
+  border-top: 1px solid var(--glass-border);
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
 }
 
 .main-footer p {
   margin: 0;
+  letter-spacing: 0.02em;
 }
 </style>

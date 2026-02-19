@@ -33,9 +33,9 @@
           <button @click="toggleLiveTail" class="live-btn" :class="{ active: showLiveTail }">
             {{ showLiveTail ? '✕ Close Viewer' : '▶ Log Viewer' }}
           </button>
-          <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn">
-            <span v-if="triageLoading" class="btn-spinner"></span>
-            {{ triageLoading ? 'Running...' : '🤖 Run AI Triage' }}
+          <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn" :class="{'scanning': triageLoading}">
+            <div v-if="triageLoading" class="scanline"></div>
+            {{ triageLoading ? 'Analyzing Logs...' : '🤖 Run AI Triage' }}
           </button>
           <button @click="deleteCurrentAnalysis" class="delete-btn" title="Delete analysis">
             🗑️
@@ -44,7 +44,7 @@
       </header>
 
       <!-- Stats Grid -->
-      <section class="stats-grid">
+      <section class="stats-grid animate-slide-up stagger-1">
         <StatCard
           title="Total Lines"
           :value="analysis.total_lines"
@@ -79,7 +79,7 @@
       </section>
 
       <!-- Main Content Grid -->
-      <div v-else class="content-grid">
+      <div v-else class="content-grid animate-slide-up stagger-2">
         <!-- Level Chart -->
         <LevelChart :level-counts="analysis.level_counts" />
 
@@ -112,7 +112,7 @@
       </div>
 
       <!-- Log Sample Preview -->
-      <section class="panel log-sample-section">
+      <section class="panel log-sample-section animate-slide-up stagger-3">
         <div class="section-header-row">
           <h3>📋 Log Sample Preview</h3>
           <button @click="toggleSample" class="toggle-btn">
@@ -134,7 +134,7 @@
       </section>
 
       <!-- Triage Results -->
-      <section v-if="triage" class="triage-section">
+      <section v-if="triage" class="triage-section animate-slide-up stagger-4">
         <h2>
           <span class="section-icon">🤖</span>
           AI Triage Results
@@ -532,6 +532,17 @@ onUnmounted(() => {
   gap: var(--spacing-lg);
   margin-bottom: var(--spacing-xl);
   flex-wrap: wrap;
+  position: sticky;
+  top: 80px;
+  z-index: 50;
+  background: var(--glass-bg);
+  backdrop-filter: var(--glass-blur);
+  -webkit-backdrop-filter: var(--glass-blur);
+  padding: var(--spacing-md) var(--spacing-lg);
+  border-radius: var(--radius-xl);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  transition: all var(--transition-spring);
 }
 
 .back-link {
@@ -593,6 +604,24 @@ onUnmounted(() => {
 .triage-btn {
   background: linear-gradient(135deg, var(--color-primary), var(--color-secondary));
   color: white;
+  position: relative;
+  overflow: hidden;
+}
+
+.triage-btn.scanning {
+  background: var(--color-bg-tertiary);
+  color: var(--color-primary);
+  border: 1px solid var(--color-primary);
+  pointer-events: none;
+}
+
+.scanline {
+  position: absolute;
+  top: 0; left: 0; right: 0;
+  height: 6px;
+  background: var(--color-primary-glow);
+  box-shadow: 0 0 12px var(--color-primary);
+  animation: scanline 1.5s linear infinite;
 }
 
 .triage-btn:hover:not(:disabled) {

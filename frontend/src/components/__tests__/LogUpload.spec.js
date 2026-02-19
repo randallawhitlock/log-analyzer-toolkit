@@ -39,8 +39,8 @@ describe('LogUpload', () => {
     it('renders upload prompt correctly', () => {
         const wrapper = mount(LogUpload)
         expect(wrapper.find('.upload-prompt').exists()).toBe(true)
-        expect(wrapper.text()).toContain('Choose File')
-        expect(wrapper.text()).toContain('log, .txt, .json up to 100 MB')
+        expect(wrapper.text()).toContain('Select Log File')
+        expect(wrapper.text()).toContain('Max 100MB')
     })
 
     it('validates file size and type', async () => {
@@ -58,7 +58,7 @@ describe('LogUpload', () => {
         await input.trigger('change')
 
         expect(wrapper.vm.error).toContain('Invalid file type')
-        expect(wrapper.find('.error-message').exists()).toBe(true)
+        expect(wrapper.find('.error-toast').exists()).toBe(true)
 
         // Attempt oversize file
         const largeFile = new File([''], 'test.log', { type: 'text/plain' })

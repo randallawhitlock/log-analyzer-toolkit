@@ -58,7 +58,7 @@ describe('HomeView', () => {
         expect(wrapper.find('.hero-title').text()).toContain('Log Analyzer')
 
         // Evaluate API call
-        expect(mockGetAnalyses).toHaveBeenCalledWith({ limit: 4 })
+        expect(mockGetAnalyses).toHaveBeenCalledWith({ limit: 3 })
 
         // Await promise resolution
         await wrapper.vm.$nextTick()

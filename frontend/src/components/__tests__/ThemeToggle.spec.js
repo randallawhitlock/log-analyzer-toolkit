@@ -49,6 +49,7 @@ describe('ThemeToggle', () => {
 
     it('toggles theme when button is clicked', async () => {
         const wrapper = mount(ThemeToggle)
+        await nextTick()
 
         // Initial state: light
         expect(wrapper.vm.isDark).toBe(false)
