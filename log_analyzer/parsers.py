@@ -39,7 +39,6 @@ __all__ = [
     "OpenStackParser",
     "SquidParser",
     "UniversalFallbackParser",
-    "CustomParserRegistry",
 ]
 
 
@@ -885,8 +884,10 @@ class ApacheAccessParser(BaseParser):
 
         # Determine level based on status code
         status = int(data.get("status", 0))
-        if status >= 500 or status >= 400:
+        if status >= 500:
             level = "ERROR"
+        elif status >= 400:
+            level = "WARNING"
         else:
             level = "INFO"
 
@@ -1019,8 +1020,10 @@ class NginxAccessParser(BaseParser):
 
         # Determine level based on status code
         status = int(data.get("status", 0))
-        if status >= 500 or status >= 400:
+        if status >= 500:
             level = "ERROR"
+        elif status >= 400:
+            level = "WARNING"
         elif status >= 300:
             level = "INFO"
         else:
@@ -1058,8 +1061,6 @@ class JSONLogParser(BaseParser):
 
     name = "json"
 
-    import json
-
     # Common timestamp field names
     TIMESTAMP_FIELDS = ["timestamp", "time", "@timestamp", "ts", "datetime"]
     LEVEL_FIELDS = ["level", "severity", "lvl", "log_level", "loglevel"]
@@ -1073,8 +1074,6 @@ class JSONLogParser(BaseParser):
 
     def parse(self, line: str) -> Optional[LogEntry]:
         """Parse a JSON log line."""
-        import json
-
         try:
             data = json.loads(line)
         except json.JSONDecodeError:
@@ -1931,8 +1930,10 @@ class NginxParser(BaseParser):
 
         # Infer level from status code
         status = int(data.get("status", 200))
-        if status >= 500 or status >= 400:
+        if status >= 500:
             level = "ERROR"
+        elif status >= 400:
+            level = "WARNING"
         else:
             level = "INFO"
 
@@ -2066,96 +2067,3 @@ class UniversalFallbackParser(BaseParser):
                 "timestamp_format": timestamp_format,
             },
         )
-
-
-# =============================================================================
-# Custom Parser Registration
-# =============================================================================
-
-
-class CustomParserRegistry:
-    """
-    Registry for custom parser extensions.
-
-    This allows companies to easily add their own log format parsers without
-    modifying the core codebase.
-
-    Usage:
-        from log_analyzer.parsers import CustomParserRegistry, BaseParser
-
-        class MyCompanyLogParser(BaseParser):
-            name = "mycompany"
-
-            def can_parse(self, line: str) -> bool:
-                return line.startswith('[MYCO]')
-
-            def parse(self, line: str) -> Optional[LogEntry]:
-                # Your parsing logic here
-                ...
-
-        # Register the parser
-        CustomParserRegistry.register(MyCompanyLogParser)
-
-        # Get all parsers (built-in + custom)
-        all_parsers = CustomParserRegistry.get_all_parsers()
-    """
-
-    _custom_parsers: list = []
-
-    @classmethod
-    def register(cls, parser_class: type) -> None:
-        """
-        Register a custom parser class.
-
-        Args:
-            parser_class: A class that extends BaseParser
-        """
-        if not issubclass(parser_class, BaseParser):
-            raise TypeError(f"{parser_class} must be a subclass of BaseParser")
-
-        # Instantiate and add to registry
-        cls._custom_parsers.append(parser_class())
-
-    @classmethod
-    def register_instance(cls, parser: BaseParser) -> None:
-        """
-        Register an already-instantiated parser.
-
-        Args:
-            parser: An instance of a BaseParser subclass
-        """
-        if not isinstance(parser, BaseParser):
-            raise TypeError(f"{parser} must be an instance of BaseParser")
-
-        cls._custom_parsers.append(parser)
-
-    @classmethod
-    def get_custom_parsers(cls) -> list:
-        """Get all registered custom parsers."""
-        return cls._custom_parsers.copy()
-
-    @classmethod
-    def clear(cls) -> None:
-        """Clear all custom parsers (useful for testing)."""
-        cls._custom_parsers = []
-
-    @classmethod
-    def get_all_parsers(cls, include_fallback: bool = True) -> list:
-        """
-        Get all parsers: built-in + custom + optional fallback.
-
-        Args:
-            include_fallback: Whether to include UniversalFallbackParser at the end
-
-        Returns:
-            List of all parser instances
-        """
-        from .analyzer import AVAILABLE_PARSERS
-
-        parsers = AVAILABLE_PARSERS.copy()
-        parsers.extend(cls._custom_parsers)
-
-        if include_fallback:
-            parsers.append(UniversalFallbackParser())
-
-        return parsers

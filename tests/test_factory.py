@@ -2,12 +2,12 @@
 Unit tests for AI provider factory module.
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
-from log_analyzer.ai_providers.base import AIProvider, ProviderNotAvailableError
 from log_analyzer.ai_providers import factory
+from log_analyzer.ai_providers.base import ProviderNotAvailableError
 
 
 @pytest.fixture(autouse=True)
@@ -21,6 +21,7 @@ def _clear_registry():
 # ---------------------------------------------------------------------------
 # list_available_providers
 # ---------------------------------------------------------------------------
+
 
 class TestListAvailableProviders:
     """Tests for list_available_providers."""
@@ -44,6 +45,7 @@ class TestListAvailableProviders:
 # ---------------------------------------------------------------------------
 # list_configured_providers
 # ---------------------------------------------------------------------------
+
 
 class TestListConfiguredProviders:
     """Tests for list_configured_providers."""
@@ -88,6 +90,7 @@ class TestListConfiguredProviders:
 # ---------------------------------------------------------------------------
 # get_provider (specific name)
 # ---------------------------------------------------------------------------
+
 
 class TestGetProviderSpecific:
     """Tests for get_provider when a name is specified."""
@@ -140,10 +143,11 @@ class TestGetProviderSpecific:
 # get_provider (auto-detect)
 # ---------------------------------------------------------------------------
 
+
 class TestGetProviderAutoDetect:
     """Tests for auto-detection of providers."""
 
-    @patch('log_analyzer.ai_providers.factory.get_config')
+    @patch("log_analyzer.ai_providers.factory.get_config")
     def test_auto_detect_first_available(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.default_provider = None
@@ -158,7 +162,7 @@ class TestGetProviderAutoDetect:
         provider = factory.get_provider()
         assert provider is mock_instance
 
-    @patch('log_analyzer.ai_providers.factory.get_config')
+    @patch("log_analyzer.ai_providers.factory.get_config")
     def test_auto_detect_skips_unavailable(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.default_provider = None
@@ -177,7 +181,7 @@ class TestGetProviderAutoDetect:
         provider = factory.get_provider()
         assert provider is good_cls.return_value
 
-    @patch('log_analyzer.ai_providers.factory.get_config')
+    @patch("log_analyzer.ai_providers.factory.get_config")
     def test_auto_detect_respects_default(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.default_provider = "gemini"
@@ -198,17 +202,18 @@ class TestGetProviderAutoDetect:
         # Should pick gemini because it was set as default
         assert provider is gemini_cls.return_value
 
-    @patch('log_analyzer.ai_providers.factory.get_config')
-    def test_no_providers_raises(self, mock_get_config):
+    @patch("log_analyzer.ai_providers.factory._register_providers")
+    @patch("log_analyzer.ai_providers.factory.get_config")
+    def test_no_providers_raises(self, mock_get_config, _mock_register):
         mock_config = MagicMock()
         mock_config.default_provider = None
         mock_get_config.return_value = mock_config
-        # _PROVIDER_REGISTRY is empty
+        factory._PROVIDER_REGISTRY.clear()
 
         with pytest.raises(ProviderNotAvailableError):
             factory.get_provider()
 
-    @patch('log_analyzer.ai_providers.factory.get_config')
+    @patch("log_analyzer.ai_providers.factory.get_config")
     def test_no_providers_configured_raises(self, mock_get_config):
         mock_config = MagicMock()
         mock_config.default_provider = None
@@ -225,6 +230,7 @@ class TestGetProviderAutoDetect:
 # ---------------------------------------------------------------------------
 # get_provider_info
 # ---------------------------------------------------------------------------
+
 
 class TestGetProviderInfo:
     """Tests for get_provider_info."""

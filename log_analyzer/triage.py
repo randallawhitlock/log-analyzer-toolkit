@@ -187,9 +187,8 @@ def build_triage_prompt(result: AnalysisResult) -> str:
     # Build HTTP status codes
     status_code_lines = []
     if result.status_codes:
-        for code, count in sorted(result.status_codes.items(),
-                                   key=lambda x: x[1], reverse=True)[:10]:
-            indicator = "⚠️" if str(code).startswith(('4', '5')) else "✓"
+        for code, count in sorted(result.status_codes.items(), key=lambda x: x[1], reverse=True)[:10]:
+            indicator = "⚠️" if str(code).startswith(("4", "5")) else "✓"
             status_code_lines.append(f"- {indicator} HTTP {code}: {count:,}")
     status_codes = "\n".join(status_code_lines) or "- No HTTP status code data"
 
@@ -197,22 +196,14 @@ def build_triage_prompt(result: AnalysisResult) -> str:
     temporal_lines = []
     if result.analytics:
         analytics = result.analytics
-        if hasattr(analytics, 'error_rate_trend') and analytics.error_rate_trend:
-            temporal_lines.append(f"- Error rate trend: {analytics.error_rate_trend}")
-        if hasattr(analytics, 'temporal_distribution') and analytics.temporal_distribution:
+        if hasattr(analytics, "temporal_distribution") and analytics.temporal_distribution:
             # Show top time buckets with most activity
-            sorted_buckets = sorted(
-                analytics.temporal_distribution.items(),
-                key=lambda x: x[1], reverse=True
-            )[:5]
+            sorted_buckets = sorted(analytics.temporal_distribution.items(), key=lambda x: x[1], reverse=True)[:5]
             for ts, count in sorted_buckets:
                 temporal_lines.append(f"- {ts}: {count:,} entries")
-        if hasattr(analytics, 'hourly_distribution') and analytics.hourly_distribution:
+        if hasattr(analytics, "hourly_distribution") and analytics.hourly_distribution:
             # Find peak hours
-            peak_hours = sorted(
-                analytics.hourly_distribution.items(),
-                key=lambda x: x[1], reverse=True
-            )[:3]
+            peak_hours = sorted(analytics.hourly_distribution.items(), key=lambda x: x[1], reverse=True)[:3]
             for hour, count in peak_hours:
                 temporal_lines.append(f"- Peak hour {hour}:00: {count:,} entries")
     temporal_patterns = "\n".join(temporal_lines) or "- No temporal data available"
@@ -280,21 +271,23 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
     Returns:
         Parsed TriageResult
     """
-    logger.debug(f"Parsing triage response from {response.provider} "
-                f"(latency={response.latency_ms}ms, length={len(response.content)} chars)")
+    logger.debug(
+        f"Parsing triage response from {response.provider} "
+        f"(latency={response.latency_ms}ms, length={len(response.content)} chars)"
+    )
 
     content = response.content.strip()
 
     # Try to extract JSON from the response
     # Handle cases where the response includes markdown code blocks
-    json_match = re.search(r'```(?:json)?\s*([\s\S]*?)\s*```', content)
+    json_match = re.search(r"```(?:json)?\s*([\s\S]*?)\s*```", content)
     if json_match:
         logger.debug("Extracted JSON from markdown code block")
         content = json_match.group(1)
 
     # Try to find JSON object in the content
-    json_start = content.find('{')
-    json_end = content.rfind('}') + 1
+    json_start = content.find("{")
+    json_end = content.rfind("}") + 1
     if json_start >= 0 and json_end > json_start:
         content = content[json_start:json_end]
 
@@ -325,19 +318,21 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
             severity_str = issue_data.get("severity", "MEDIUM").upper()
             severity = Severity(severity_str) if severity_str in Severity.__members__ else Severity.MEDIUM
 
-            issues.append(TriageIssue(
-                title=issue_data.get("title", "Unknown Issue"),
-                severity=severity,
-                confidence=float(issue_data.get("confidence", 0.5)),
-                description=issue_data.get("description", ""),
-                affected_components=issue_data.get("affected_components", []),
-                sample_logs=issue_data.get("sample_logs", []),
-                recommendation=issue_data.get("recommendation", ""),
-                git_actions=issue_data.get("git_actions"),
-                root_cause_analysis=issue_data.get("root_cause_analysis", ""),
-                category=issue_data.get("category", "unknown"),
-                evidence=issue_data.get("evidence", []),
-            ))
+            issues.append(
+                TriageIssue(
+                    title=issue_data.get("title", "Unknown Issue"),
+                    severity=severity,
+                    confidence=float(issue_data.get("confidence", 0.5)),
+                    description=issue_data.get("description", ""),
+                    affected_components=issue_data.get("affected_components", []),
+                    sample_logs=issue_data.get("sample_logs", []),
+                    recommendation=issue_data.get("recommendation", ""),
+                    git_actions=issue_data.get("git_actions"),
+                    root_cause_analysis=issue_data.get("root_cause_analysis", ""),
+                    category=issue_data.get("category", "unknown"),
+                    evidence=issue_data.get("evidence", []),
+                )
+            )
         except (ValueError, KeyError):
             # Skip malformed issues
             continue
@@ -345,9 +340,7 @@ def parse_triage_response(response: AIResponse, result: AnalysisResult) -> Triag
     # Parse overall severity
     overall_severity_str = data.get("overall_severity", "MEDIUM").upper()
     overall_severity = (
-        Severity(overall_severity_str)
-        if overall_severity_str in Severity.__members__
-        else Severity.MEDIUM
+        Severity(overall_severity_str) if overall_severity_str in Severity.__members__ else Severity.MEDIUM
     )
 
     return TriageResult(
@@ -462,10 +455,12 @@ class TriageEngine:
         triage_result = parse_triage_response(response, analysis_result)
 
         elapsed = time.time() - start_time
-        logger.info(f"Triage completed in {elapsed:.2f}s: "
-                   f"{len(triage_result.issues)} issues identified, "
-                   f"severity={triage_result.overall_severity.value}, "
-                   f"confidence={triage_result.confidence:.2f}")
+        logger.info(
+            f"Triage completed in {elapsed:.2f}s: "
+            f"{len(triage_result.issues)} issues identified, "
+            f"severity={triage_result.overall_severity.value}, "
+            f"confidence={triage_result.confidence:.2f}"
+        )
 
         return triage_result
 

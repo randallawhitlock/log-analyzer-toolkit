@@ -16,6 +16,7 @@ from datetime import datetime, timedelta
 from threading import Lock
 from typing import Any, Optional
 
+from .analytics import compute_analytics
 from .constants import COUNTER_PRUNE_TO, DEFAULT_MAX_ERRORS, DEFAULT_SAMPLE_SIZE, MAX_COUNTER_SIZE
 from .parsers import (
     AndroidParser,
@@ -46,16 +47,6 @@ from .parsers import (
 )
 from .reader import LogReader
 
-# Analytics imports (optional, loaded on demand)
-try:
-    from .analytics import compute_analytics
-    from .stats_models import AnalyticsData
-    ANALYTICS_AVAILABLE = True
-except ImportError:
-    ANALYTICS_AVAILABLE = False
-    AnalyticsData = None
-
-
 logger = logging.getLogger(__name__)
 
 
@@ -65,12 +56,10 @@ AVAILABLE_PARSERS = [
     AWSCloudWatchParser(),
     GCPCloudLoggingParser(),
     AzureMonitorParser(),
-
     # Container runtime parsers
     DockerJSONParser(),
     KubernetesParser(),
     ContainerdParser(),
-
     # Web server and application parsers
     ApacheAccessParser(),
     ApacheErrorParser(),
@@ -107,6 +96,7 @@ class AnalysisResult:
     """
     Contains the results of log file analysis.
     """
+
     filepath: str
     detected_format: str
     total_lines: int
@@ -139,7 +129,7 @@ class AnalysisResult:
         """Calculate error rate as percentage."""
         if self.parsed_lines == 0:
             return 0.0
-        error_count = self.level_counts.get('ERROR', 0) + self.level_counts.get('CRITICAL', 0)
+        error_count = self.level_counts.get("ERROR", 0) + self.level_counts.get("CRITICAL", 0)
         return (error_count / self.parsed_lines) * 100
 
     @property
@@ -205,11 +195,17 @@ class LogAnalyzer:
             counter.update(dict(top_items))
             logger.debug(f"Pruned Counter from {max_size}+ items to {len(counter)} items")
 
-    def _analyze_multithreaded(self, filepath: str, parser: BaseParser,
-                                max_errors: int, progress_callback: Optional[Any],
-                                chunk_size: int, start_time: float,
-                                enable_analytics: bool = False,
-                                analytics_config: Optional[dict] = None) -> AnalysisResult:
+    def _analyze_multithreaded(
+        self,
+        filepath: str,
+        parser: BaseParser,
+        max_errors: int,
+        progress_callback: Optional[Any],
+        chunk_size: int,
+        start_time: float,
+        enable_analytics: bool = False,
+        analytics_config: Optional[dict] = None,
+    ) -> AnalysisResult:
         """
         Analyze log file using multithreaded processing.
 
@@ -257,8 +253,7 @@ class LogAnalyzer:
             with ThreadPoolExecutor(max_workers=self.max_workers) as executor:
                 # Submit all chunks
                 future_to_chunk = {
-                    executor.submit(self._process_chunk, chunk, parser, max_errors): i
-                    for i, chunk in enumerate(chunks)
+                    executor.submit(self._process_chunk, chunk, parser, max_errors): i for i, chunk in enumerate(chunks)
                 }
 
                 # Collect results as they complete
@@ -268,9 +263,9 @@ class LogAnalyzer:
                         chunk_results.append(result)
 
                         # Update progress
-                        if progress_callback and hasattr(progress_callback, 'update'):
+                        if progress_callback and hasattr(progress_callback, "update"):
                             with progress_lock:
-                                lines_in_chunk = result['parsed_lines'] + result['failed_lines']
+                                lines_in_chunk = result["parsed_lines"] + result["failed_lines"]
                                 progress_callback.update(advance=lines_in_chunk)
                                 lines_processed += lines_in_chunk
 
@@ -292,14 +287,20 @@ class LogAnalyzer:
             max_errors=max_errors,
             start_time=start_time,
             enable_analytics=enable_analytics,
-            analytics_config=analytics_config
+            analytics_config=analytics_config,
         )
 
-    def _merge_chunk_results(self, filepath: str, parser: BaseParser,
-                             total_lines: int, chunk_results: list[dict],
-                             max_errors: int, start_time: float,
-                             enable_analytics: bool = False,
-                             analytics_config: Optional[dict] = None) -> AnalysisResult:
+    def _merge_chunk_results(
+        self,
+        filepath: str,
+        parser: BaseParser,
+        total_lines: int,
+        chunk_results: list[dict],
+        max_errors: int,
+        start_time: float,
+        enable_analytics: bool = False,
+        analytics_config: Optional[dict] = None,
+    ) -> AnalysisResult:
         """
         Merge results from multiple chunk processing tasks.
 
@@ -331,22 +332,22 @@ class LogAnalyzer:
         latest = None
 
         for result in chunk_results:
-            parsed_lines += result['parsed_lines']
-            failed_lines += result['failed_lines']
+            parsed_lines += result["parsed_lines"]
+            failed_lines += result["failed_lines"]
 
-            level_counts.update(result['level_counts'])
-            status_codes.update(result['status_codes'])
-            source_counts.update(result['source_counts'])
-            error_messages.update(result['error_messages'])
+            level_counts.update(result["level_counts"])
+            status_codes.update(result["status_codes"])
+            source_counts.update(result["source_counts"])
+            error_messages.update(result["error_messages"])
 
-            errors.extend(result['errors'])
-            warnings.extend(result['warnings'])
+            errors.extend(result["errors"])
+            warnings.extend(result["warnings"])
 
             # Track earliest/latest timestamps
-            if result['earliest'] and (earliest is None or result['earliest'] < earliest):
-                earliest = result['earliest']
-            if result['latest'] and (latest is None or result['latest'] > latest):
-                latest = result['latest']
+            if result["earliest"] and (earliest is None or result["earliest"] < earliest):
+                earliest = result["earliest"]
+            if result["latest"] and (latest is None or result["latest"] > latest):
+                latest = result["latest"]
 
         # Prune counters to prevent unbounded size
         self._prune_counter(source_counts)
@@ -375,26 +376,27 @@ class LogAnalyzer:
         )
 
         # Compute advanced analytics if enabled
-        if enable_analytics and ANALYTICS_AVAILABLE:
+        if enable_analytics:
             logger.debug("Computing advanced analytics (multithreaded)")
             result.analytics = compute_analytics(
                 errors=errors,
                 warnings=warnings,
                 level_counts=dict(level_counts),
                 source_counts=dict(source_counts),
-                config=analytics_config or {}
+                config=analytics_config or {},
             )
 
-        logger.info(f"Multithreaded analysis completed in {elapsed:.2f}s: "
-                   f"{parsed_lines:,} lines parsed ({result.parse_success_rate:.1f}% success), "
-                   f"{failed_lines:,} failed, "
-                   f"{result.error_rate:.1f}% error rate, "
-                   f"throughput={parsed_lines/elapsed:.0f} lines/sec")
+        logger.info(
+            f"Multithreaded analysis completed in {elapsed:.2f}s: "
+            f"{parsed_lines:,} lines parsed ({result.parse_success_rate:.1f}% success), "
+            f"{failed_lines:,} failed, "
+            f"{result.error_rate:.1f}% error rate, "
+            f"throughput={parsed_lines/elapsed:.0f} lines/sec"
+        )
 
         return result
 
-    def _process_chunk(self, lines: list[str], parser: BaseParser,
-                       max_errors: int) -> dict:
+    def _process_chunk(self, lines: list[str], parser: BaseParser, max_errors: int) -> dict:
         """
         Process a chunk of lines in a worker thread.
 
@@ -449,30 +451,30 @@ class LogAnalyzer:
                 source_counts[entry.source] += 1
 
             # Track HTTP status codes
-            status = entry.metadata.get('status')
+            status = entry.metadata.get("status")
             if status:
                 status_codes[status] += 1
 
             # Collect errors and warnings
-            if entry.level in ('ERROR', 'CRITICAL'):
+            if entry.level in ("ERROR", "CRITICAL"):
                 error_messages[entry.message] += 1
                 if len(errors) < max_errors:
                     errors.append(entry)
-            elif entry.level == 'WARNING':
+            elif entry.level == "WARNING":
                 if len(warnings) < max_errors:
                     warnings.append(entry)
 
         return {
-            'parsed_lines': parsed_lines,
-            'failed_lines': failed_lines,
-            'level_counts': level_counts,
-            'status_codes': status_codes,
-            'source_counts': source_counts,
-            'error_messages': error_messages,
-            'errors': errors,
-            'warnings': warnings,
-            'earliest': earliest,
-            'latest': latest,
+            "parsed_lines": parsed_lines,
+            "failed_lines": failed_lines,
+            "level_counts": level_counts,
+            "status_codes": status_codes,
+            "source_counts": source_counts,
+            "error_messages": error_messages,
+            "errors": errors,
+            "warnings": warnings,
+            "earliest": earliest,
+            "latest": latest,
         }
 
     def detect_format(self, filepath: str, sample_size: int = DEFAULT_SAMPLE_SIZE) -> Optional[BaseParser]:
@@ -512,8 +514,10 @@ class LogAnalyzer:
 
         # Return parser with most successful parses
         best_format = parse_counts.most_common(1)[0][0]
-        logger.info(f"Detected format '{best_format}' for {filepath} "
-                   f"(parse_counts={dict(parse_counts)}, elapsed={elapsed:.2f}s)")
+        logger.info(
+            f"Detected format '{best_format}' for {filepath} "
+            f"(parse_counts={dict(parse_counts)}, elapsed={elapsed:.2f}s)"
+        )
 
         for parser in self.parsers:
             if parser.name == best_format:
@@ -521,15 +525,19 @@ class LogAnalyzer:
 
         return None
 
-    def analyze(self, filepath: str, parser: BaseParser = None,
-                max_errors: int = DEFAULT_MAX_ERRORS,
-                progress_callback: Optional[Any] = None,
-                use_fallback: bool = True,
-                detect_inline: bool = True,
-                use_threading: bool = True,
-                chunk_size: int = 10000,
-                enable_analytics: bool = False,
-                analytics_config: Optional[dict] = None) -> AnalysisResult:
+    def analyze(
+        self,
+        filepath: str,
+        parser: BaseParser = None,
+        max_errors: int = DEFAULT_MAX_ERRORS,
+        progress_callback: Optional[Any] = None,
+        use_fallback: bool = True,
+        detect_inline: bool = True,
+        use_threading: bool = True,
+        chunk_size: int = 10000,
+        enable_analytics: bool = False,
+        analytics_config: Optional[dict] = None,
+    ) -> AnalysisResult:
         """
         Perform comprehensive analysis of a log file.
 
@@ -560,9 +568,11 @@ class LogAnalyzer:
             Multithreading provides significant performance improvements for large files.
         """
         logger.info(f"Starting analysis of {filepath}")
-        logger.debug(f"Parameters: parser={parser.name if parser else 'auto'}, max_errors={max_errors}, "
-                    f"use_fallback={use_fallback}, detect_inline={detect_inline}, "
-                    f"use_threading={use_threading}, chunk_size={chunk_size}")
+        logger.debug(
+            f"Parameters: parser={parser.name if parser else 'auto'}, max_errors={max_errors}, "
+            f"use_fallback={use_fallback}, detect_inline={detect_inline}, "
+            f"use_threading={use_threading}, chunk_size={chunk_size}"
+        )
         start_time = time.time()
 
         # If using threading, we must detect format first (can't defer)
@@ -599,7 +609,7 @@ class LogAnalyzer:
                 chunk_size=chunk_size,
                 start_time=start_time,
                 enable_analytics=enable_analytics,
-                analytics_config=analytics_config
+                analytics_config=analytics_config,
             )
 
         # Fall back to single-threaded implementation
@@ -630,7 +640,7 @@ class LogAnalyzer:
             total_lines += 1
 
             # Update progress
-            if progress_callback and hasattr(progress_callback, 'update'):
+            if progress_callback and hasattr(progress_callback, "update"):
                 progress_callback.update(advance=1)
 
             if not line.strip():
@@ -664,7 +674,9 @@ class LogAnalyzer:
                     else:
                         # No format detected
                         if use_fallback:
-                            logger.info(f"No specific format detected inline for {filepath}, using universal fallback parser")
+                            logger.info(
+                                f"No specific format detected inline for {filepath}, using universal fallback parser"
+                            )
                             parser = UniversalFallbackParser()
                         else:
                             logger.error(f"Could not detect log format for {filepath}")
@@ -698,16 +710,16 @@ class LogAnalyzer:
                             source_counts[entry.source] += 1
 
                         # Track HTTP status codes
-                        status = entry.metadata.get('status')
+                        status = entry.metadata.get("status")
                         if status:
                             status_codes[status] += 1
 
                         # Collect errors and warnings
-                        if entry.level in ('ERROR', 'CRITICAL'):
+                        if entry.level in ("ERROR", "CRITICAL"):
                             error_messages[entry.message] += 1
                             if len(errors) < max_errors:
                                 errors.append(entry)
-                        elif entry.level == 'WARNING':
+                        elif entry.level == "WARNING":
                             if len(warnings) < max_errors:
                                 warnings.append(entry)
 
@@ -741,16 +753,16 @@ class LogAnalyzer:
                 source_counts[entry.source] += 1
 
             # Track HTTP status codes
-            status = entry.metadata.get('status')
+            status = entry.metadata.get("status")
             if status:
                 status_codes[status] += 1
 
             # Collect errors and warnings
-            if entry.level in ('ERROR', 'CRITICAL'):
+            if entry.level in ("ERROR", "CRITICAL"):
                 error_messages[entry.message] += 1
                 if len(errors) < max_errors:
                     errors.append(entry)
-            elif entry.level == 'WARNING':
+            elif entry.level == "WARNING":
                 if len(warnings) < max_errors:
                     warnings.append(entry)
 
@@ -776,24 +788,23 @@ class LogAnalyzer:
         )
 
         # Compute advanced analytics if enabled
-        if enable_analytics and ANALYTICS_AVAILABLE:
+        if enable_analytics:
             logger.debug("Computing advanced analytics")
             result.analytics = compute_analytics(
                 errors=errors,
                 warnings=warnings,
                 level_counts=dict(level_counts),
                 source_counts=dict(source_counts),
-                config=analytics_config or {}
+                config=analytics_config or {},
             )
-        elif enable_analytics and not ANALYTICS_AVAILABLE:
-            logger.warning("Analytics requested but analytics module not available")
-
         elapsed = time.time() - start_time
-        logger.info(f"Analysis completed in {elapsed:.2f}s: "
-                   f"{parsed_lines:,} lines parsed ({result.parse_success_rate:.1f}% success), "
-                   f"{failed_lines:,} failed, "
-                   f"{result.error_rate:.1f}% error rate, "
-                   f"throughput={parsed_lines/elapsed:.0f} lines/sec")
+        logger.info(
+            f"Analysis completed in {elapsed:.2f}s: "
+            f"{parsed_lines:,} lines parsed ({result.parse_success_rate:.1f}% success), "
+            f"{failed_lines:,} failed, "
+            f"{result.error_rate:.1f}% error rate, "
+            f"throughput={parsed_lines/elapsed:.0f} lines/sec"
+        )
         logger.debug(f"Level counts: {dict(level_counts)}")
         logger.debug(f"Top sources: {len(source_counts)} unique sources")
         logger.debug(f"Top errors: {len(error_messages)} unique error messages")

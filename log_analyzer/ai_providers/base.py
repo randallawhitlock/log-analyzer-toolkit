@@ -1,4 +1,3 @@
-
 """
 Base classes and interfaces for AI providers.
 
@@ -28,11 +27,13 @@ __all__ = [
 
 class AIError(Exception):
     """Base exception for AI provider errors."""
+
     pass
 
 
 class ProviderNotAvailableError(AIError):
     """Raised when a provider is not available or configured."""
+
     pass
 
 
@@ -46,11 +47,13 @@ class RateLimitError(AIError):
 
 class AuthenticationError(AIError):
     """Raised when authentication fails (invalid API key)."""
+
     pass
 
 
 class Severity(str, Enum):
     """Severity levels for triaged issues."""
+
     CRITICAL = "CRITICAL"
     HIGH = "HIGH"
     MEDIUM = "MEDIUM"
@@ -72,6 +75,7 @@ class AIResponse:
         timestamp: When the response was received
         raw_response: Original response object for debugging
     """
+
     content: str
     model: str
     provider: str
@@ -79,11 +83,6 @@ class AIResponse:
     latency_ms: Optional[float] = None
     timestamp: datetime = field(default_factory=datetime.now)
     raw_response: Optional[Any] = None
-
-    def __post_init__(self):
-        """Ensure raw_response is not included in string representations."""
-        # Prevent accidental logging of full response objects
-        pass
 
     def __repr__(self) -> str:
         """Return string representation without sensitive raw_response data."""
@@ -111,6 +110,7 @@ class TriageIssue:
         category: Issue category (error_spike, connection_failure, auth_failure, etc.)
         evidence: Specific log patterns or entries supporting this finding
     """
+
     title: str
     severity: Severity
     confidence: float
@@ -146,6 +146,7 @@ class TriageResult:
         provider_used: Which AI provider generated this result
         raw_analysis: Full AI response for transparency
     """
+
     summary: str
     overall_severity: Severity
     confidence: float
@@ -246,23 +247,6 @@ class AIProvider(ABC):
         """
         pass
 
-    def validate_api_key(self, api_key: Optional[str]) -> bool:
-        """
-        Validate that an API key is present and has valid format.
-
-        This does NOT verify the key with the provider, just checks format.
-
-        Args:
-            api_key: The API key to validate
-
-        Returns:
-            True if the key appears valid, False otherwise
-        """
-        if not api_key:
-            return False
-        # Basic validation - at least 20 characters, no whitespace
-        return len(api_key) >= 20 and not any(c.isspace() for c in api_key)
-
     def sanitize_log_content(self, content: str, max_length: int = 50000) -> str:
         """
         Sanitize log content before sending to AI provider.
@@ -286,34 +270,26 @@ class AIProvider(ABC):
         # Note: These are basic patterns and may not catch all edge cases
 
         # Email: basic alphanumeric + @ + domain
-        content = re.sub(
-            r'\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b',
-            '[EMAIL_REDACTED]',
-            content
-        )
+        content = re.sub(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Z|a-z]{2,}\b", "[EMAIL_REDACTED]", content)
 
         # IPv4: 4 groups of digits separated by dots
-        content = re.sub(
-            r'\b(?:\d{1,3}\.){3}\d{1,3}\b',
-            '[IP_REDACTED]',
-            content
-        )
+        content = re.sub(r"\b(?:\d{1,3}\.){3}\d{1,3}\b", "[IP_REDACTED]", content)
 
         # IPv6: Full and compressed formats
         content = re.sub(
-            r'\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b',  # Full
-            '[IP_REDACTED]',
-            content
+            r"\b(?:[0-9a-fA-F]{1,4}:){7}[0-9a-fA-F]{1,4}\b",  # Full
+            "[IP_REDACTED]",
+            content,
         )
         content = re.sub(
-            r'\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b',  # Compressed end
-            '[IP_REDACTED]',
-            content
+            r"\b(?:[0-9a-fA-F]{1,4}:){1,7}:\b",  # Compressed end
+            "[IP_REDACTED]",
+            content,
         )
         content = re.sub(
-            r'\b::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b',  # Compressed start
-            '[IP_REDACTED]',
-            content
+            r"\b::(?:[0-9a-fA-F]{1,4}:){0,6}[0-9a-fA-F]{1,4}\b",  # Compressed start
+            "[IP_REDACTED]",
+            content,
         )
 
         # Truncate if too long

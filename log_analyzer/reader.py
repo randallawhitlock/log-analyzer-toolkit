@@ -47,48 +47,10 @@ class LogReader:
         """
         try:
             with open(self.filepath, encoding=self.encoding, errors="replace") as f:
-                for _line_num, line in enumerate(f, 1):
+                for line in f:
                     yield line.rstrip("\n\r")
         except UnicodeDecodeError as e:
             raise ValueError(f"Encoding error: {e}") from e
-
-    def read_all(self, max_lines: int = 200_000) -> list[str]:
-        """
-        Read all lines from the log file into memory.
-
-        Args:
-            max_lines: Safety limit to prevent memory exhaustion (default: 200,000)
-
-        Returns:
-            List of all lines from the file.
-
-        Raises:
-            ValueError: If file exceeds max_lines limit
-        """
-        lines = []
-        for i, line in enumerate(self.read_lines()):
-            if i >= max_lines:
-                raise ValueError(
-                    f"File exceeds maximum line limit ({max_lines:,}). "
-                    "Use streaming methods (read_lines) or increase limit."
-                )
-            lines.append(line)
-        return lines
-
-    def get_file_info(self) -> dict:
-        """
-        Get metadata about the log file.
-
-        Returns:
-            Dictionary containing file metadata.
-        """
-        stat = self.filepath.stat()
-        return {
-            "path": str(self.filepath.absolute()),
-            "name": self.filepath.name,
-            "size_bytes": stat.st_size,
-            "modified": stat.st_mtime,
-        }
 
     def count_lines(self) -> int:
         """
@@ -102,18 +64,3 @@ class LogReader:
             for _ in f:
                 count += 1
         return count
-
-
-def read_log_file(filepath: str, encoding: str = "utf-8") -> Iterator[str]:
-    """
-    Convenience function to read lines from a log file.
-
-    Args:
-        filepath: Path to the log file
-        encoding: Character encoding (default: utf-8)
-
-    Yields:
-        Each line from the log file.
-    """
-    reader = LogReader(filepath, encoding)
-    yield from reader.read_lines()

@@ -33,7 +33,8 @@ __all__ = [
 # Time-Series Analysis Functions
 # ============================================================================
 
-def compute_temporal_distribution(entries: list[LogEntry], bucket_size: str = '1h') -> dict[str, int]:
+
+def compute_temporal_distribution(entries: list[LogEntry], bucket_size: str = "1h") -> dict[str, int]:
     """
     Compute distribution of log entries across time buckets.
 
@@ -53,13 +54,13 @@ def compute_temporal_distribution(entries: list[LogEntry], bucket_size: str = '1
     bucket_counts = Counter()
 
     # Parse bucket size
-    if bucket_size == '5min':
+    if bucket_size == "5min":
         delta = timedelta(minutes=5)
-    elif bucket_size == '15min':
+    elif bucket_size == "15min":
         delta = timedelta(minutes=15)
-    elif bucket_size == '1h':
+    elif bucket_size == "1h":
         delta = timedelta(hours=1)
-    elif bucket_size == '1day':
+    elif bucket_size == "1day":
         delta = timedelta(days=1)
     else:
         logger.warning(f"Unknown bucket size '{bucket_size}', defaulting to 1h")
@@ -150,7 +151,7 @@ def detect_trend(temporal_dist: dict[str, int]) -> str:
         'increasing'
     """
     if not temporal_dist or len(temporal_dist) < 2:
-        return 'stable'
+        return "stable"
 
     # Sort by time
     sorted_buckets = sorted(temporal_dist.items())
@@ -164,11 +165,11 @@ def detect_trend(temporal_dist: dict[str, int]) -> str:
 
     # Determine trend based on slope
     if slope > 0.1:  # Arbitrary threshold for "increasing"
-        return 'increasing'
+        return "increasing"
     elif slope < -0.1:
-        return 'decreasing'
+        return "decreasing"
     else:
-        return 'stable'
+        return "stable"
 
 
 def _calculate_slope(x_values: list[float], y_values: list[float]) -> float:
@@ -185,7 +186,6 @@ def _calculate_slope(x_values: list[float], y_values: list[float]) -> float:
     if not x_values or not y_values or len(x_values) != len(y_values):
         return 0.0
 
-    len(x_values)
     x_mean = statistics.mean(x_values)
     y_mean = statistics.mean(y_values)
 
@@ -228,12 +228,13 @@ def identify_peak_period(temporal_dist: dict[str, int]) -> Optional[str]:
 # Main Analytics Computation
 # ============================================================================
 
+
 def compute_analytics(
     errors: list[LogEntry],
     warnings: list[LogEntry],
     level_counts: dict,
     source_counts: dict,
-    config: Optional[dict] = None
+    config: Optional[dict] = None,
 ) -> AnalyticsData:
     """
     Compute advanced analytics from log analysis data.
@@ -278,8 +279,8 @@ def compute_analytics(
     analytics = AnalyticsData()
 
     # Time-Series Analysis (enabled by default)
-    if config.get('enable_time_series', True):
-        bucket_size = config.get('time_bucket_size', DEFAULT_TIME_BUCKET_SIZE)
+    if config.get("enable_time_series", True):
+        bucket_size = config.get("time_bucket_size", DEFAULT_TIME_BUCKET_SIZE)
 
         logger.debug(f"Computing time-series analytics (bucket_size={bucket_size})")
         analytics.temporal_distribution = compute_temporal_distribution(all_entries, bucket_size)
@@ -287,22 +288,9 @@ def compute_analytics(
         analytics.trend_direction = detect_trend(analytics.temporal_distribution)
         analytics.peak_period = identify_peak_period(analytics.temporal_distribution)
 
-    # Statistical Analysis (Phase 3B.2 - to be implemented)
-    if config.get('enable_statistics', False):
-        logger.debug("Statistical analysis not yet implemented")
-        pass
-
-    # Anomaly Detection (Phase 3B.4 - to be implemented)
-    if config.get('enable_anomaly_detection', False):
-        logger.debug("Anomaly detection not yet implemented")
-        pass
-
-    # Pattern Mining (Phase 3B.5 - to be implemented)
-    if config.get('enable_pattern_mining', False):
-        logger.debug("Pattern mining not yet implemented")
-        pass
-
-    logger.info(f"Analytics computed: {len(analytics.temporal_distribution)} time buckets, "
-               f"trend={analytics.trend_direction}, peak={analytics.peak_period}")
+    logger.info(
+        f"Analytics computed: {len(analytics.temporal_distribution)} time buckets, "
+        f"trend={analytics.trend_direction}, peak={analytics.peak_period}"
+    )
 
     return analytics

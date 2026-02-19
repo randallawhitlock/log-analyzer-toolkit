@@ -484,7 +484,7 @@ class TestParserEdgeCases:
         line = '10.0.0.1 - - [10/Oct/2023:14:00:00 -0700] "GET /missing HTTP/1.1" 404 0'
         result = parser.parse(line)
         assert result is not None
-        assert result.level == "ERROR"
+        assert result.level == "WARNING"
 
     def test_apache_access_301(self):
         from log_analyzer.parsers import ApacheAccessParser

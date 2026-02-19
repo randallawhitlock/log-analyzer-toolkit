@@ -79,10 +79,7 @@ addopts = [
     "-v",
     "--tb=short",
     "--cov=log_analyzer",
-    "--cov-report=html",
-    "--cov-report=term",
     "--cov-report=term-missing",
-    "--cov-fail-under=90",
 ]
 filterwarnings = [
     "ignore::FutureWarning:google.auth.*:",

@@ -8,6 +8,7 @@ beautiful terminal output using the Rich library.
 import logging
 import sys
 from pathlib import Path
+from types import SimpleNamespace
 
 import click
 from rich import box
@@ -17,6 +18,7 @@ from rich.progress import BarColumn, Progress, SpinnerColumn, TaskProgressColumn
 from rich.table import Table
 from rich.text import Text
 
+from . import __version__
 from .analyzer import AVAILABLE_PARSERS, AnalysisResult, LogAnalyzer
 from .constants import (
     DEFAULT_MAX_ERRORS,
@@ -35,7 +37,7 @@ def setup_logging(verbose: bool = False, log_file: str = None):
     level = logging.DEBUG if verbose else logging.INFO
 
     # Configure format
-    log_format = '%(asctime)s - %(name)s - %(levelname)s - %(message)s'
+    log_format = "%(asctime)s - %(name)s - %(levelname)s - %(message)s"
 
     # Configure handlers
     handlers = []
@@ -55,16 +57,12 @@ def setup_logging(verbose: bool = False, log_file: str = None):
         handlers.append(console_handler)
 
     # Configure root logger
-    logging.basicConfig(
-        level=level,
-        format=log_format,
-        handlers=handlers if handlers else [logging.NullHandler()]
-    )
+    logging.basicConfig(level=level, format=log_format, handlers=handlers if handlers else [logging.NullHandler()])
 
 
 def format_level(level: str) -> Text:
     """Format log level with appropriate color."""
-    return Text(level, style=LEVEL_COLORS.get(level, 'white'))
+    return Text(level, style=LEVEL_COLORS.get(level, "white"))
 
 
 def format_count(count: int, total: int) -> Text:
@@ -74,9 +72,9 @@ def format_count(count: int, total: int) -> Text:
 
 
 @click.group()
-@click.version_option(version='0.1.0')
-@click.option('--verbose', '-v', is_flag=True, help='Enable verbose logging output')
-@click.option('--log-file', type=click.Path(), help='Write logs to a file')
+@click.version_option(version=__version__)
+@click.option("--verbose", "-v", is_flag=True, help="Enable verbose logging output")
+@click.option("--log-file", type=click.Path(), help="Write logs to a file")
 @click.pass_context
 def cli(ctx, verbose: bool, log_file: str):
     """
@@ -90,43 +88,57 @@ def cli(ctx, verbose: bool, log_file: str):
 
     # Store config in context for subcommands
     ctx.ensure_object(dict)
-    ctx.obj['verbose'] = verbose
-    ctx.obj['log_file'] = log_file
+    ctx.obj["verbose"] = verbose
+    ctx.obj["log_file"] = log_file
 
     logger.debug(f"CLI initialized with verbose={verbose}, log_file={log_file}")
 
 
 @cli.command()
-@click.argument('filepath', type=click.Path(exists=True))
-@click.option('--format', '-f', 'log_format',
-              type=click.Choice(['auto', 'apache_access', 'apache_error',
-                                'nginx_access', 'json', 'syslog']),
-              default='auto', help='Log format (default: auto-detect)')
-@click.option('--max-errors', '-e', default=DEFAULT_MAX_ERRORS,
-              help='Maximum errors to display')
-@click.option('--workers', '-w', 'max_workers', type=int,
-              help='Number of worker threads (default: CPU count)')
-@click.option('--no-threading', is_flag=True,
-              help='Disable multithreaded processing')
-@click.option('--enable-analytics', is_flag=True,
-              help='Enable advanced analytics (time-series, pattern analysis)')
-@click.option('--time-bucket', default='1h',
-              type=click.Choice(['5min', '15min', '1h', '1day']),
-              help='Time bucket size for temporal analysis (default: 1h)')
-@click.option('--report', type=click.Choice(['markdown', 'html', 'csv', 'json']),
-              help='Generate report in specified format')
-@click.option('--output', '-o', type=click.Path(),
-              help='Output file path for report')
-def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, no_threading: bool,
-            enable_analytics: bool, time_bucket: str, report: str, output: str):
+@click.argument("filepath", type=click.Path(exists=True))
+@click.option(
+    "--format",
+    "-f",
+    "log_format",
+    type=click.Choice(["auto", "apache_access", "apache_error", "nginx_access", "json", "syslog"]),
+    default="auto",
+    help="Log format (default: auto-detect)",
+)
+@click.option("--max-errors", "-e", default=DEFAULT_MAX_ERRORS, help="Maximum errors to display")
+@click.option("--workers", "-w", "max_workers", type=int, help="Number of worker threads (default: CPU count)")
+@click.option("--no-threading", is_flag=True, help="Disable multithreaded processing")
+@click.option("--enable-analytics", is_flag=True, help="Enable advanced analytics (time-series, pattern analysis)")
+@click.option(
+    "--time-bucket",
+    default="1h",
+    type=click.Choice(["5min", "15min", "1h", "1day"]),
+    help="Time bucket size for temporal analysis (default: 1h)",
+)
+@click.option(
+    "--report", type=click.Choice(["markdown", "html", "csv", "json"]), help="Generate report in specified format"
+)
+@click.option("--output", "-o", type=click.Path(), help="Output file path for report")
+def analyze(
+    filepath: str,
+    log_format: str,
+    max_errors: int,
+    max_workers: int,
+    no_threading: bool,
+    enable_analytics: bool,
+    time_bucket: str,
+    report: str,
+    output: str,
+):
     """
     Analyze a log file and display summary statistics.
 
     FILEPATH is the path to the log file to analyze.
     """
     logger.info(f"Starting analysis of {filepath}")
-    logger.debug(f"Parameters: log_format={log_format}, max_errors={max_errors}, "
-                f"max_workers={max_workers}, no_threading={no_threading}")
+    logger.debug(
+        f"Parameters: log_format={log_format}, max_errors={max_errors}, "
+        f"max_workers={max_workers}, no_threading={no_threading}"
+    )
 
     console.print()
 
@@ -134,7 +146,7 @@ def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, n
 
     # Get parser
     parser = None
-    if log_format != 'auto':
+    if log_format != "auto":
         for p in AVAILABLE_PARSERS:
             if p.name == log_format:
                 parser = p
@@ -144,6 +156,7 @@ def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, n
     try:
         # Count lines for progress tracking
         from .reader import LogReader
+
         with console.status("[dim]Counting lines..."):
             reader = LogReader(filepath)
             total_lines = reader.count_lines()
@@ -160,38 +173,28 @@ def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, n
             console=console,
             transient=False,
         ) as progress:
-            task = progress.add_task(
-                f"[cyan]Analyzing {Path(filepath).name}...",
-                total=total_lines
-            )
-
-            # Create a simple progress updater
-            class ProgressUpdater:
-                def __init__(self, progress_obj, task_id):
-                    self.progress = progress_obj
-                    self.task_id = task_id
-
-                def update(self, advance=1):
-                    self.progress.update(self.task_id, advance=advance)
+            task = progress.add_task(f"[cyan]Analyzing {Path(filepath).name}...", total=total_lines)
 
             # Build analytics config
             analytics_config = {
-                'time_bucket_size': time_bucket,
-                'enable_time_series': True,
+                "time_bucket_size": time_bucket,
+                "enable_time_series": True,
             }
 
             result = analyzer.analyze(
                 filepath,
                 parser=parser,
                 max_errors=max_errors,
-                progress_callback=ProgressUpdater(progress, task),
+                progress_callback=SimpleNamespace(update=lambda advance=1: progress.update(task, advance=advance)),
                 use_threading=not no_threading,
                 enable_analytics=enable_analytics,
-                analytics_config=analytics_config if enable_analytics else None
+                analytics_config=analytics_config if enable_analytics else None,
             )
 
-        logger.info(f"Analysis completed: {result.parsed_lines} lines parsed, "
-                   f"{result.failed_lines} failed, error_rate={result.error_rate:.1f}%")
+        logger.info(
+            f"Analysis completed: {result.parsed_lines} lines parsed, "
+            f"{result.failed_lines} failed, error_rate={result.error_rate:.1f}%"
+        )
 
     except KeyboardInterrupt:
         logger.info("Analysis cancelled by user")
@@ -222,19 +225,19 @@ def analyze(filepath: str, log_format: str, max_errors: int, max_workers: int, n
         with console.status(f"[bold blue]Generating {report.upper()} report..."):
             generator = ReportGenerator(result)
 
-            if report == 'markdown':
+            if report == "markdown":
                 content = generator.to_markdown()
-            elif report == 'html':
+            elif report == "html":
                 content = generator.to_html()
-            elif report == 'csv':
+            elif report == "csv":
                 content = generator.to_csv()
-            elif report == 'json':
+            elif report == "json":
                 content = generator.to_json()
             else:
                 content = generator.to_markdown()
 
         if output:
-            with open(output, 'w', encoding='utf-8') as f:
+            with open(output, "w", encoding="utf-8") as f:
                 f.write(content)
             console.print(f"[green]✓ Report saved to {output}[/green]")
         else:
@@ -247,12 +250,13 @@ def _display_analysis(result: AnalysisResult):
     """Display analysis results in a formatted layout."""
 
     # Header
-    console.print(Panel(
-        f"[bold]{Path(result.filepath).name}[/bold]\n"
-        f"Format: [cyan]{result.detected_format}[/cyan]",
-        title="📊 Log Analysis Report",
-        border_style="blue"
-    ))
+    console.print(
+        Panel(
+            f"[bold]{Path(result.filepath).name}[/bold]\n" f"Format: [cyan]{result.detected_format}[/cyan]",
+            title="📊 Log Analysis Report",
+            border_style="blue",
+        )
+    )
     console.print()
 
     # Overview table
@@ -283,15 +287,11 @@ def _display_analysis(result: AnalysisResult):
         severity.add_column("Count", justify="right")
         severity.add_column("Percentage", justify="right")
 
-        for level in ['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']:
+        for level in ["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]:
             count = result.level_counts.get(level, 0)
             if count > 0:
                 pct = (count / result.parsed_lines * 100) if result.parsed_lines > 0 else 0
-                severity.add_row(
-                    format_level(level),
-                    f"{count:,}",
-                    f"{pct:.1f}%"
-                )
+                severity.add_row(format_level(level), f"{count:,}", f"{pct:.1f}%")
 
         console.print(severity)
         console.print()
@@ -314,11 +314,7 @@ def _display_analysis(result: AnalysisResult):
             count = result.status_codes[code]
             cat_key = code // 100
             cat_name, cat_style = categories.get(cat_key, ("Unknown", "dim"))
-            status.add_row(
-                str(code),
-                f"{count:,}",
-                Text(cat_name, style=cat_style)
-            )
+            status.add_row(str(code), f"{count:,}", Text(cat_name, style=cat_style))
 
         console.print(status)
         console.print()
@@ -358,13 +354,15 @@ def _display_analytics(analytics, console: Console):
     # Import here to avoid circular dependency
 
     # Time-Series Summary Panel
-    console.print(Panel(
-        f"Trend: [cyan]{analytics.trend_direction}[/cyan]\n"
-        f"Peak Period: [yellow]{analytics.peak_period or 'N/A'}[/yellow]\n"
-        f"Active Hours: [green]{len(analytics.hourly_distribution)}[/green]",
-        title="📈 Time-Series Analytics",
-        border_style="cyan"
-    ))
+    console.print(
+        Panel(
+            f"Trend: [cyan]{analytics.trend_direction}[/cyan]\n"
+            f"Peak Period: [yellow]{analytics.peak_period or 'N/A'}[/yellow]\n"
+            f"Active Hours: [green]{len(analytics.hourly_distribution)}[/green]",
+            title="📈 Time-Series Analytics",
+            border_style="cyan",
+        )
+    )
     console.print()
 
     # Hourly Distribution Bar Chart (ASCII)
@@ -418,9 +416,9 @@ def _display_temporal_table(temporal_dist: dict, console: Console):
         # Format timestamp for display (show just the time portion)
         try:
             # Extract time portion from ISO format
-            if 'T' in timestamp_str:
-                time_part = timestamp_str.split('T')[1][:5]  # HH:MM
-                date_part = timestamp_str.split('T')[0][5:]  # MM-DD
+            if "T" in timestamp_str:
+                time_part = timestamp_str.split("T")[1][:5]  # HH:MM
+                date_part = timestamp_str.split("T")[0][5:]  # MM-DD
                 display_time = f"{date_part} {time_part}"
             else:
                 display_time = timestamp_str[:16]
@@ -436,7 +434,7 @@ def _display_temporal_table(temporal_dist: dict, console: Console):
 
 
 @cli.command()
-@click.argument('filepath', type=click.Path(exists=True))
+@click.argument("filepath", type=click.Path(exists=True))
 def detect(filepath: str):
     """
     Detect the log format of a file.
@@ -454,18 +452,22 @@ def detect(filepath: str):
 
 
 @cli.command()
-@click.argument('filepath', type=click.Path(exists=True))
-@click.option('--level', '-l',
-              type=click.Choice(['CRITICAL', 'ERROR', 'WARNING', 'INFO', 'DEBUG']),
-              default='ERROR', help='Minimum level to show')
-@click.option('--limit', '-n', default=20, help='Maximum entries to show')
+@click.argument("filepath", type=click.Path(exists=True))
+@click.option(
+    "--level",
+    "-l",
+    type=click.Choice(["CRITICAL", "ERROR", "WARNING", "INFO", "DEBUG"]),
+    default="ERROR",
+    help="Minimum level to show",
+)
+@click.option("--limit", "-n", default=20, help="Maximum entries to show")
 def errors(filepath: str, level: str, limit: int):
     """
     Show errors and warnings from a log file.
 
     FILEPATH is the path to the log file to analyze.
     """
-    level_order = ['DEBUG', 'INFO', 'WARNING', 'ERROR', 'CRITICAL']
+    level_order = ["DEBUG", "INFO", "WARNING", "ERROR", "CRITICAL"]
     min_level_idx = level_order.index(level)
 
     analyzer = LogAnalyzer()
@@ -498,17 +500,17 @@ def formats():
     table.add_column("Description")
 
     descriptions = {
-        'aws_cloudwatch': 'AWS CloudWatch Logs (JSON and plain text)',
-        'gcp_logging': 'Google Cloud Logging (Stackdriver format)',
-        'azure_monitor': 'Azure Monitor and Application Insights logs',
-        'docker_json': 'Docker container logs (JSON format)',
-        'kubernetes': 'Kubernetes pod logs with metadata',
-        'containerd': 'containerd CRI logs',
-        'apache_access': 'Apache Combined Log Format (access.log)',
-        'apache_error': 'Apache Error Log Format (error.log)',
-        'nginx_access': 'nginx Access Log Format',
-        'json': 'JSON structured logging (various apps)',
-        'syslog': 'Syslog format (RFC 3164 & RFC 5424)',
+        "aws_cloudwatch": "AWS CloudWatch Logs (JSON and plain text)",
+        "gcp_logging": "Google Cloud Logging (Stackdriver format)",
+        "azure_monitor": "Azure Monitor and Application Insights logs",
+        "docker_json": "Docker container logs (JSON format)",
+        "kubernetes": "Kubernetes pod logs with metadata",
+        "containerd": "containerd CRI logs",
+        "apache_access": "Apache Combined Log Format (access.log)",
+        "apache_error": "Apache Error Log Format (error.log)",
+        "nginx_access": "nginx Access Log Format",
+        "json": "JSON structured logging (various apps)",
+        "syslog": "Syslog format (RFC 3164 & RFC 5424)",
     }
 
     for parser in AVAILABLE_PARSERS:
@@ -518,16 +520,23 @@ def formats():
 
 
 @cli.command()
-@click.argument('filepath', type=click.Path(exists=True))
-@click.option('--provider', '-p',
-              type=click.Choice(['anthropic', 'gemini', 'ollama', 'auto']),
-              default='auto', help='AI provider to use (default: auto-detect)')
-@click.option('--format', '-f', 'log_format',
-              type=click.Choice(['auto', 'apache_access', 'apache_error',
-                                'nginx_access', 'json', 'syslog']),
-              default='auto', help='Log format (default: auto-detect)')
-@click.option('--json', 'output_json', is_flag=True,
-              help='Output results as JSON')
+@click.argument("filepath", type=click.Path(exists=True))
+@click.option(
+    "--provider",
+    "-p",
+    type=click.Choice(["anthropic", "gemini", "ollama", "auto"]),
+    default="auto",
+    help="AI provider to use (default: auto-detect)",
+)
+@click.option(
+    "--format",
+    "-f",
+    "log_format",
+    type=click.Choice(["auto", "apache_access", "apache_error", "nginx_access", "json", "syslog"]),
+    default="auto",
+    help="Log format (default: auto-detect)",
+)
+@click.option("--json", "output_json", is_flag=True, help="Output results as JSON")
 def triage(filepath: str, provider: str, log_format: str, output_json: bool):
     """
     AI-powered intelligent log triage.
@@ -554,7 +563,7 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
     console.print()
 
     # Get provider name (None means auto-detect)
-    provider_name = None if provider == 'auto' else provider
+    provider_name = None if provider == "auto" else provider
 
     try:
         with console.status("[bold blue]Initializing AI provider..."):
@@ -562,14 +571,15 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
             ai_provider = engine._get_provider()
             logger.info(f"AI provider initialized: {ai_provider.name} ({ai_provider.get_model()})")
 
-        console.print(f"[dim]Using provider:[/dim] [cyan]{ai_provider.name}[/cyan] "
-                     f"([dim]{ai_provider.get_model()}[/dim])")
+        console.print(
+            f"[dim]Using provider:[/dim] [cyan]{ai_provider.name}[/cyan] " f"([dim]{ai_provider.get_model()}[/dim])"
+        )
         console.print()
 
         with console.status("[bold blue]Analyzing log file..."):
             # Get parser if specified
             parser = None
-            if log_format != 'auto':
+            if log_format != "auto":
                 for p in AVAILABLE_PARSERS:
                     if p.name == log_format:
                         parser = p.name
@@ -577,9 +587,11 @@ def triage(filepath: str, provider: str, log_format: str, output_json: bool):
                         break
 
             result = engine.triage(filepath, parser=parser)
-            logger.info(f"Triage completed: {len(result.issues)} issues identified, "
-                       f"overall_severity={result.overall_severity.value}, "
-                       f"confidence={result.confidence:.2f}")
+            logger.info(
+                f"Triage completed: {len(result.issues)} issues identified, "
+                f"overall_severity={result.overall_severity.value}, "
+                f"confidence={result.confidence:.2f}"
+            )
 
     except KeyboardInterrupt:
         logger.info("Triage cancelled by user")
@@ -618,16 +630,15 @@ def _display_triage(result, filepath: str):
 
     # Severity colors
     severity_colors = {
-        Severity.CRITICAL: 'bold red',
-        Severity.HIGH: 'red',
-        Severity.MEDIUM: 'yellow',
-        Severity.LOW: 'blue',
-        Severity.HEALTHY: 'green',
+        Severity.CRITICAL: "bold red",
+        Severity.HIGH: "red",
+        Severity.MEDIUM: "yellow",
+        Severity.LOW: "blue",
+        Severity.HEALTHY: "green",
     }
 
     # Header panel
-    severity_text = Text(result.overall_severity.value,
-                        style=severity_colors.get(result.overall_severity, 'white'))
+    severity_text = Text(result.overall_severity.value, style=severity_colors.get(result.overall_severity, "white"))
 
     header_content = (
         f"[bold]{Path(filepath).name}[/bold]\n"
@@ -635,11 +646,13 @@ def _display_triage(result, filepath: str):
         f"Confidence: [cyan]{result.confidence:.0%}[/cyan]"
     )
 
-    console.print(Panel(
-        header_content,
-        title=f"🧠 AI Triage Report - {severity_text}",
-        border_style=severity_colors.get(result.overall_severity, 'blue')
-    ))
+    console.print(
+        Panel(
+            header_content,
+            title=f"🧠 AI Triage Report - {severity_text}",
+            border_style=severity_colors.get(result.overall_severity, "blue"),
+        )
+    )
     console.print()
 
     # Summary
@@ -666,10 +679,12 @@ def _display_triage(result, filepath: str):
         console.print()
 
         for i, issue in enumerate(result.issues, 1):
-            issue_color = severity_colors.get(issue.severity, 'white')
+            issue_color = severity_colors.get(issue.severity, "white")
 
             # Build issue content with new fields
-            category_badge = f"[dim]Category: {issue.category}[/dim]\n\n" if issue.category and issue.category != "unknown" else ""
+            category_badge = (
+                f"[dim]Category: {issue.category}[/dim]\n\n" if issue.category and issue.category != "unknown" else ""
+            )
 
             content_parts = [
                 f"[bold]{issue.title}[/bold]\n",
@@ -679,27 +694,23 @@ def _display_triage(result, filepath: str):
 
             # Root cause analysis section
             if issue.root_cause_analysis:
-                content_parts.append(
-                    f"\n[bold]🔬 Root Cause Analysis:[/bold]\n{issue.root_cause_analysis}\n"
-                )
+                content_parts.append(f"\n[bold]🔬 Root Cause Analysis:[/bold]\n{issue.root_cause_analysis}\n")
 
             # Evidence section
             if issue.evidence:
                 evidence_text = "\n".join(f"  • {e}" for e in issue.evidence)
-                content_parts.append(
-                    f"\n[bold]📋 Evidence:[/bold]\n{evidence_text}\n"
+                content_parts.append(f"\n[bold]📋 Evidence:[/bold]\n{evidence_text}\n")
+
+            content_parts.append(f"\n[bold]Recommendation:[/bold] {issue.recommendation}")
+
+            console.print(
+                Panel(
+                    "".join(content_parts),
+                    title=f"Issue {i} - {Text(issue.severity.value, style=issue_color)} "
+                    f"(Confidence: {issue.confidence:.0%})",
+                    border_style=issue_color,
                 )
-
-            content_parts.append(
-                f"\n[bold]Recommendation:[/bold] {issue.recommendation}"
             )
-
-            console.print(Panel(
-                "".join(content_parts),
-                title=f"Issue {i} - {Text(issue.severity.value, style=issue_color)} "
-                      f"(Confidence: {issue.confidence:.0%})",
-                border_style=issue_color,
-            ))
             console.print()
     else:
         console.print("[green]✅ No significant issues identified[/green]")
@@ -707,11 +718,10 @@ def _display_triage(result, filepath: str):
 
 
 @cli.command()
-@click.option('--provider', '-p',
-              type=click.Choice(['anthropic', 'gemini', 'ollama']),
-              help='Configure a specific provider')
-@click.option('--show', '-s', is_flag=True,
-              help='Show current configuration')
+@click.option(
+    "--provider", "-p", type=click.Choice(["anthropic", "gemini", "ollama"]), help="Configure a specific provider"
+)
+@click.option("--show", "-s", is_flag=True, help="Show current configuration")
 def configure(provider: str, show: bool):
     """
     Configure AI providers for log triage.
@@ -799,6 +809,7 @@ def _configure_anthropic():
     api_key = os.environ.get("ANTHROPIC_API_KEY")
     if api_key:
         from .config import mask_api_key
+
         console.print(f"[green]✅ API key found:[/green] {mask_api_key(api_key)}")
     else:
         console.print("[yellow]⚠️ ANTHROPIC_API_KEY not set[/yellow]")
@@ -822,6 +833,7 @@ def _configure_gemini():
     api_key = os.environ.get("GOOGLE_API_KEY")
     if api_key:
         from .config import mask_api_key
+
         console.print(f"[green]✅ API key found:[/green] {mask_api_key(api_key)}")
     else:
         console.print("[yellow]⚠️ GOOGLE_API_KEY not set[/yellow]")
@@ -842,6 +854,7 @@ def _configure_ollama():
 
     try:
         from .ai_providers.ollama_provider import OllamaProvider
+
         ollama = OllamaProvider()
 
         if ollama.is_available():
@@ -878,6 +891,5 @@ def main():
     cli()
 
 
-if __name__ == '__main__':
+if __name__ == "__main__":
     main()
-

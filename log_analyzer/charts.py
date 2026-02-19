@@ -36,9 +36,9 @@ def generate_chartjs_config(analytics) -> str:
         data = []
         for timestamp_str, count in sorted_buckets:
             # Format label for display
-            if 'T' in timestamp_str:
-                time_part = timestamp_str.split('T')[1][:5]  # HH:MM
-                date_part = timestamp_str.split('T')[0][5:]  # MM-DD
+            if "T" in timestamp_str:
+                time_part = timestamp_str.split("T")[1][:5]  # HH:MM
+                date_part = timestamp_str.split("T")[0][5:]  # MM-DD
                 label = f"{date_part} {time_part}"
             else:
                 label = timestamp_str[:16]
@@ -46,18 +46,20 @@ def generate_chartjs_config(analytics) -> str:
             labels.append(label)
             data.append(count)
 
-        charts['temporal'] = {
+        charts["temporal"] = {
             "type": "line",
             "data": {
                 "labels": labels,
-                "datasets": [{
-                    "label": "Log Entries",
-                    "data": data,
-                    "borderColor": "rgb(75, 192, 192)",
-                    "backgroundColor": "rgba(75, 192, 192, 0.1)",
-                    "tension": 0.1,
-                    "fill": True
-                }]
+                "datasets": [
+                    {
+                        "label": "Log Entries",
+                        "data": data,
+                        "borderColor": "rgb(75, 192, 192)",
+                        "backgroundColor": "rgba(75, 192, 192, 0.1)",
+                        "tension": 0.1,
+                        "fill": True,
+                    }
+                ],
             },
             "options": {
                 "responsive": True,
@@ -66,28 +68,15 @@ def generate_chartjs_config(analytics) -> str:
                     "title": {
                         "display": True,
                         "text": f"Temporal Distribution (Trend: {analytics.trend_direction})",
-                        "font": {"size": 16}
+                        "font": {"size": 16},
                     },
-                    "legend": {
-                        "display": False
-                    }
+                    "legend": {"display": False},
                 },
                 "scales": {
-                    "y": {
-                        "beginAtZero": True,
-                        "title": {
-                            "display": True,
-                            "text": "Count"
-                        }
-                    },
-                    "x": {
-                        "title": {
-                            "display": True,
-                            "text": "Time Period"
-                        }
-                    }
-                }
-            }
+                    "y": {"beginAtZero": True, "title": {"display": True, "text": "Count"}},
+                    "x": {"title": {"display": True, "text": "Time Period"}},
+                },
+            },
         }
 
     # Hourly bar chart
@@ -112,17 +101,19 @@ def generate_chartjs_config(analytics) -> str:
             else:  # Normal activity (blue)
                 colors.append("rgba(54, 162, 235, 0.8)")
 
-        charts['hourly'] = {
+        charts["hourly"] = {
             "type": "bar",
             "data": {
                 "labels": hourly_labels,
-                "datasets": [{
-                    "label": "Count",
-                    "data": hourly_data,
-                    "backgroundColor": colors,
-                    "borderColor": colors,
-                    "borderWidth": 1
-                }]
+                "datasets": [
+                    {
+                        "label": "Count",
+                        "data": hourly_data,
+                        "backgroundColor": colors,
+                        "borderColor": colors,
+                        "borderWidth": 1,
+                    }
+                ],
             },
             "options": {
                 "responsive": True,
@@ -131,58 +122,15 @@ def generate_chartjs_config(analytics) -> str:
                     "title": {
                         "display": True,
                         "text": f"Hourly Distribution (Peak: {analytics.peak_period or 'N/A'})",
-                        "font": {"size": 16}
+                        "font": {"size": 16},
                     },
-                    "legend": {
-                        "display": False
-                    }
+                    "legend": {"display": False},
                 },
                 "scales": {
-                    "y": {
-                        "beginAtZero": True,
-                        "title": {
-                            "display": True,
-                            "text": "Count"
-                        }
-                    },
-                    "x": {
-                        "title": {
-                            "display": True,
-                            "text": "Hour of Day"
-                        }
-                    }
-                }
-            }
+                    "y": {"beginAtZero": True, "title": {"display": True, "text": "Count"}},
+                    "x": {"title": {"display": True, "text": "Hour of Day"}},
+                },
+            },
         }
 
     return json.dumps(charts, indent=2)
-
-
-def generate_ascii_bar_chart(data: dict, max_width: int = 40) -> list:
-    """
-    Generate ASCII bar chart data for terminal display.
-
-    Args:
-        data: Dictionary mapping labels to values
-        max_width: Maximum width of bars in characters
-
-    Returns:
-        List of tuples: (label, value, bar_string)
-
-    Example:
-        >>> chart_data = generate_ascii_bar_chart({'A': 10, 'B': 20, 'C': 15})
-        >>> for label, value, bar in chart_data:
-        ...     print(f"{label}: {bar} {value}")
-    """
-    if not data:
-        return []
-
-    max_value = max(data.values())
-    chart_rows = []
-
-    for label, value in sorted(data.items()):
-        bar_width = int((value / max_value) * max_width) if max_value > 0 else 0
-        bar = "█" * bar_width
-        chart_rows.append((label, value, bar))
-
-    return chart_rows
