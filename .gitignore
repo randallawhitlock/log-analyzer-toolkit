@@ -33,3 +33,7 @@ log_analyzer.db
 test_migration.db
 uploads/
 .env
+
+# Node
+node_modules/
+coverage/
