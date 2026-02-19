@@ -246,9 +246,9 @@ The Log Analyzer Toolkit is a full-stack application with three surfaces: a **CL
 **As an** admin, **I want** WebSocket endpoints to respect authentication **so that** unauthenticated users can't stream log data.
 
 **Acceptance Criteria:**
-- [ ] **BUG**: `/realtime/ws/*` endpoints currently have NO authentication — they need to be secured
-- [ ] WebSocket connections should validate API key via query param or initial message
-- [ ] Unauthenticated WebSocket connections are rejected
+- [x] **RESOLVED (04a42b0)**: `/realtime/ws/*` endpoints currently have NO authentication — they need to be secured
+- [x] WebSocket connections should validate API key via query param or initial message
+- [x] Unauthenticated WebSocket connections are rejected
 
 ### US-6.3: Prevent path traversal attacks
 **As an** admin, **I want** the system to block directory traversal attempts **so that** attackers can't read arbitrary files.
@@ -283,17 +283,17 @@ The Log Analyzer Toolkit is a full-stack application with three surfaces: a **CL
 **As a** user, **I want to** know when my background analysis is done **so that** I can view the results.
 
 **Acceptance Criteria:**
-- [ ] **MISSING**: Frontend needs a polling mechanism to detect when `detected_format` changes from `"pending"` to a real format
-- [ ] Analysis detail page should poll `GET /api/v1/analysis/{id}` every few seconds while status is "pending"
-- [ ] Transition from "pending" to "complete" triggers a UI refresh
+- [x] **RESOLVED (66b1705)**: Frontend needs a polling mechanism to detect when `detected_format` changes from `"pending"` to a real format
+- [x] Analysis detail page should poll `GET /api/v1/analysis/{id}` every few seconds while status is "pending"
+- [x] Transition from "pending" to "complete" triggers a UI refresh
 - [ ] Transition from "pending" to "failed" shows an error state
 
 ### US-7.3: Clean up orphaned files
 **As an** admin, **I want** failed background analyses to clean up their uploaded files **so that** disk space isn't wasted.
 
 **Acceptance Criteria:**
-- [ ] **BUG**: Background processing failure currently leaves the file on disk — it should be cleaned up
-- [ ] A periodic cleanup job or cleanup-on-read mechanism removes orphaned files
+- [x] **RESOLVED (a3898ea)**: Background processing failure currently leaves the file on disk — it should be cleaned up
+- [x] A periodic cleanup job or cleanup-on-read mechanism removes orphaned files
 
 ---
 
@@ -326,7 +326,7 @@ The Log Analyzer Toolkit is a full-stack application with three surfaces: a **CL
 - [ ] `backend-lint` job runs Ruff on Python code
 - [ ] `backend-test` job runs pytest on Python 3.10 and 3.11
 - [ ] `frontend-build` job builds the Vue app with Node 22
-- [ ] **GAP**: No frontend lint/test job exists — should add ESLint and Vitest
+- [x] **RESOLVED (7896377)**: No frontend lint/test job exists — should add ESLint and Vitest
 
 ---
 
@@ -350,16 +350,16 @@ The Log Analyzer Toolkit is a full-stack application with three surfaces: a **CL
 **As a** user, **I want** the system to handle files up to 100 MB without running out of memory **so that** I can analyze large logs.
 
 **Acceptance Criteria:**
-- [ ] **BUG**: Current implementation reads entire file into memory via `await file.read()` — should use streaming/chunked writes for large files
-- [ ] Memory usage stays bounded during upload and analysis
-- [ ] Counter pruning prevents memory spikes during analysis (already implemented)
+- [x] **RESOLVED (04a42b0)**: Current implementation reads entire file into memory via `await file.read()` — should use streaming/chunked writes for large files
+- [x] Memory usage stays bounded during upload and analysis
+- [x] Counter pruning prevents memory spikes during analysis (already implemented)
 
 ### US-10.2: Handle Content-Length bypass
 **As an** admin, **I want** the upload size limit enforced even without Content-Length header **so that** chunked transfers can't bypass the limit.
 
 **Acceptance Criteria:**
-- [ ] **BUG**: `LimitUploadSize` middleware only checks when `content-length` header is present — chunked transfers bypass it
-- [ ] Server should also track bytes received during streaming and reject if limit exceeded
+- [x] **RESOLVED (04a42b0)**: `LimitUploadSize` middleware only checks when `content-length` header is present — chunked transfers bypass it
+- [x] Server should also track bytes received during streaming and reject if limit exceeded
 
 ### US-10.3: Display meaningful error messages
 **As a** user, **I want** all errors to show human-readable messages **so that** I can understand what went wrong.
@@ -388,15 +388,15 @@ The Log Analyzer Toolkit is a full-stack application with three surfaces: a **CL
 
 ---
 
-## Known Bugs
+## Resolved Bugs
 
-| ID | Bug | Location | Epic |
-|----|-----|----------|------|
-| B1 | WebSocket endpoints have no authentication | `backend/realtime.py` | 6.2 |
-| B2 | Background processing failure doesn't clean up files | `analyzer_service.py:200-238` | 7.3 |
-| B3 | `LimitUploadSize` bypassed by chunked transfer | `backend/main.py:71-87` | 10.2 |
-| B4 | `await file.read()` loads entire file into memory | `analyzer_service.py:58` | 10.1 |
-| B5 | No frontend polling for async analysis completion | Frontend `AnalysisView.vue` | 7.2 |
-| B6 | No delete confirmation dialog in UI | Frontend `AnalysisView.vue` | 2.4 |
-| B7 | No AI call timeout — could hang indefinitely | `triage_service.py` deep_dive | 3.2 |
-| B8 | Frontend CI has no lint or test job | `.github/workflows/ci.yml` | 8.3 |
+| ID | Bug | Location | Epic | Resolution |
+|----|-----|----------|------|------------|
+| B1 | WebSocket endpoints have no authentication | `backend/realtime.py` | 6.2 | Resolved in `04a42b0` |
+| B2 | Background processing failure doesn't clean up files | `analyzer_service.py:200-238` | 7.3 | Resolved in `a3898ea` |
+| B3 | `LimitUploadSize` bypassed by chunked transfer | `backend/main.py:71-87` | 10.2 | Resolved in `04a42b0` |
+| B4 | `await file.read()` loads entire file into memory | `analyzer_service.py:58` | 10.1 | Resolved in `04a42b0` |
+| B5 | No frontend polling for async analysis completion | Frontend `AnalysisView.vue` | 7.2 | Resolved in `66b1705` |
+| B6 | No delete confirmation dialog in UI | Frontend `AnalysisView.vue` | 2.4 | Resolved in `66b1705` |
+| B7 | No AI call timeout — could hang indefinitely | `triage_service.py` deep_dive | 3.2 | Resolved in `a3898ea` |
+| B8 | Frontend CI has no lint or test job | `.github/workflows/ci.yml` | 8.3 | Resolved in `7896377` |
