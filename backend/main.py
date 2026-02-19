@@ -112,7 +112,12 @@ async def root():
     Returns:
         dict: API information
     """
-    return {"message": "Log Analyzer Toolkit API", "version": "0.2.1", "docs": "/docs", "health": "/health"}
+    return {
+        "message": "Log Analyzer Toolkit API",
+        "version": settings.app_version,
+        "docs": "/docs",
+        "health": "/health",
+    }
 
 
 # Import and include routers
