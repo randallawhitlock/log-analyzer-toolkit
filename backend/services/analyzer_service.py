@@ -168,6 +168,76 @@ class AnalyzerService:
                 logger.debug(f"Cleaned up file: {file_path}")
             raise
 
+    def create_pending_analysis(self, db: Session, filename: str, file_path: str) -> models.Analysis:
+        """
+        Create a pending analysis record for background processing.
+
+        Args:
+            db: Database session
+            filename: Original uploaded filename
+            file_path: Path to saved file on disk
+
+        Returns:
+            models.Analysis: Created analysis record with status defaults
+        """
+        analysis_data = {
+            "filename": filename,
+            "detected_format": "pending",
+            "total_lines": 0,
+            "parsed_lines": 0,
+            "failed_lines": 0,
+            "parse_success_rate": 0.0,
+            "error_rate": 0.0,
+            "level_counts": {},
+            "top_errors": [],
+            "top_sources": [],
+            "status_codes": {},
+            "file_path": file_path,
+        }
+        analysis = crud.create_analysis(db, analysis_data)
+        logger.info(f"Created pending analysis: {analysis.id} for {filename}")
+        return analysis
+
+    def process_analysis_background(self, analysis_id: str, file_path: str, max_errors: int = DEFAULT_MAX_ERRORS):
+        """
+        Process analysis in the background and update the database record.
+
+        Args:
+            analysis_id: ID of the pending analysis record
+            file_path: Path to the log file
+            max_errors: Maximum errors to collect
+        """
+        from backend.db.database import SessionLocal
+
+        db = SessionLocal()
+        try:
+            result = self.analyze_file(file_path, max_errors=max_errors)
+            analysis_data = self.analysis_result_to_dict(result, file_path, "")
+
+            analysis = crud.get_analysis(db, analysis_id)
+            if not analysis:
+                logger.error(f"Analysis {analysis_id} not found for background update")
+                return
+
+            for key, value in analysis_data.items():
+                if key != "filename":  # Keep original filename
+                    setattr(analysis, key, value)
+
+            db.commit()
+            logger.info(f"Background analysis completed: {analysis_id}")
+        except Exception as e:
+            logger.error(f"Background analysis failed for {analysis_id}: {e}", exc_info=True)
+            # Mark as failed by updating detected_format
+            try:
+                analysis = crud.get_analysis(db, analysis_id)
+                if analysis:
+                    analysis.detected_format = "failed"
+                    db.commit()
+            except Exception:
+                logger.error(f"Failed to mark analysis {analysis_id} as failed", exc_info=True)
+        finally:
+            db.close()
+
     def delete_file(self, file_path: str) -> bool:
         """
         Delete a log file from disk.

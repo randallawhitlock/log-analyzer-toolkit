@@ -19,9 +19,8 @@ from datetime import datetime, timezone  # noqa: E402
 from fastapi import FastAPI, Request  # noqa: E402
 from fastapi.middleware.cors import CORSMiddleware  # noqa: E402
 from fastapi.responses import JSONResponse  # noqa: E402
-from slowapi import Limiter, _rate_limit_exceeded_handler  # noqa: E402
+from slowapi import _rate_limit_exceeded_handler  # noqa: E402
 from slowapi.errors import RateLimitExceeded  # noqa: E402
-from slowapi.util import get_remote_address  # noqa: E402
 from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.types import ASGIApp  # noqa: E402
 
@@ -29,11 +28,9 @@ from backend.api.schemas import HealthResponse  # noqa: E402
 from backend.constants import MAX_UPLOAD_SIZE_BYTES, MAX_UPLOAD_SIZE_MB  # noqa: E402
 from backend.db.database import init_db  # noqa: E402
 from backend.logging_middleware import StructuredLoggingMiddleware  # noqa: E402
+from backend.rate_limit import limiter  # noqa: E402
 
 logger = logging.getLogger(__name__)
-
-# Rate limiter: 60 requests/minute per IP by default
-limiter = Limiter(key_func=get_remote_address, default_limits=["60/minute"])
 
 
 @asynccontextmanager

@@ -5,11 +5,17 @@ from fastapi import HTTPException, Security, status
 from fastapi.security import APIKeyHeader
 
 from backend.constants import LOG_ANALYZER_API_KEY
+from backend.services.analyzer_service import AnalyzerService
 
 logger = logging.getLogger(__name__)
 
 API_KEY_NAME = "X-API-Key"
 api_key_header = APIKeyHeader(name=API_KEY_NAME, auto_error=False)
+
+
+def get_analyzer_service() -> AnalyzerService:
+    """Dependency provider for AnalyzerService."""
+    return AnalyzerService()
 
 
 async def get_api_key(api_key_header: str = Security(api_key_header)):
