@@ -51,16 +51,9 @@ class TriageService:
             AIError: If AI analysis fails
             ValueError: If log file cannot be processed
         """
-        return self.engine.triage(
-            file_path,
-            max_errors=max_errors
-        )
+        return self.engine.triage(file_path, max_errors=max_errors)
 
-    def triage_result_to_dict(
-        self,
-        result: TriageResult,
-        analysis_id: str
-    ) -> dict:
+    def triage_result_to_dict(self, result: TriageResult, analysis_id: str) -> dict:
         """
         Convert TriageResult to dictionary for database storage.
 
@@ -74,34 +67,35 @@ class TriageService:
         # Convert issues to dict format
         issues_data = []
         for issue in result.issues:
-            issues_data.append({
-                "title": issue.title,
-                "severity": issue.severity.value if isinstance(issue.severity, Severity) else issue.severity,
-                "confidence": issue.confidence,
-                "description": issue.description,
-                "affected_components": issue.affected_components,
-                "recommendation": issue.recommendation,
-                "root_cause_analysis": issue.root_cause_analysis,
-                "category": issue.category,
-                "evidence": issue.evidence,
-            })
+            issues_data.append(
+                {
+                    "title": issue.title,
+                    "severity": issue.severity.value if isinstance(issue.severity, Severity) else issue.severity,
+                    "confidence": issue.confidence,
+                    "description": issue.description,
+                    "affected_components": issue.affected_components,
+                    "recommendation": issue.recommendation,
+                    "root_cause_analysis": issue.root_cause_analysis,
+                    "category": issue.category,
+                    "evidence": issue.evidence,
+                }
+            )
 
         return {
             "analysis_id": analysis_id,
             "summary": result.summary,
-            "overall_severity": result.overall_severity.value if isinstance(result.overall_severity, Severity) else result.overall_severity,
+            "overall_severity": result.overall_severity.value
+            if isinstance(result.overall_severity, Severity)
+            else result.overall_severity,
             "confidence": result.confidence,
             "issues": issues_data,
             "provider_used": result.provider_used,
             "analysis_time_ms": result.analysis_time_ms,
-            "raw_analysis": result.raw_analysis
+            "raw_analysis": result.raw_analysis,
         }
 
     def run_triage_on_analysis(
-        self,
-        db: Session,
-        analysis_id: str,
-        provider_name: Optional[str] = None
+        self, db: Session, analysis_id: str, provider_name: Optional[str] = None
     ) -> models.Triage:
         """
         Run AI triage on an existing analysis.
@@ -136,15 +130,14 @@ class TriageService:
             engine = self.engine
 
         # Run triage
-        result = engine.triage(
-            analysis.file_path,
-            max_errors=DEFAULT_TRIAGE_MAX_ERRORS
-        )
+        result = engine.triage(analysis.file_path, max_errors=DEFAULT_TRIAGE_MAX_ERRORS)
 
-        logger.info(f"Triage completed: {len(result.issues)} issues found, "
-                   f"severity={result.overall_severity.value}, "
-                   f"confidence={result.confidence:.2f}, "
-                   f"time={result.analysis_time_ms}ms")
+        logger.info(
+            f"Triage completed: {len(result.issues)} issues found, "
+            f"severity={result.overall_severity.value}, "
+            f"confidence={result.confidence:.2f}, "
+            f"time={result.analysis_time_ms}ms"
+        )
 
         # Convert to dict
         triage_data = self.triage_result_to_dict(result, analysis_id)
@@ -250,10 +243,22 @@ Format your response in clean markdown with headers, bullet points, and code blo
 
         # Get AI provider
         from log_analyzer.ai_providers import get_provider
+
         engine_provider = get_provider(provider_name)
 
         start_time = time.time()
-        response = engine_provider.analyze(prompt)
+
+        import concurrent.futures
+
+        with concurrent.futures.ThreadPoolExecutor(max_workers=1) as executor:
+            future = executor.submit(engine_provider.analyze, prompt)
+            try:
+                response = future.result(timeout=120)  # 120 second timeout
+            except concurrent.futures.TimeoutError as e:
+                # Cancel the future, though the provider thread may still run
+                future.cancel()
+                raise ValueError("AI provider timed out while performing deep dive. Please try again.") from e
+
         elapsed_ms = (time.time() - start_time) * 1000
 
         logger.info(f"Deep dive completed in {elapsed_ms:.0f}ms for: {issue_title}")
@@ -265,4 +270,3 @@ Format your response in clean markdown with headers, bullet points, and code blo
             "model_used": response.model,
             "analysis_time_ms": elapsed_ms,
         }
-
