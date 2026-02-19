@@ -25,6 +25,7 @@ from starlette.middleware.base import BaseHTTPMiddleware  # noqa: E402
 from starlette.types import ASGIApp  # noqa: E402
 
 from backend.api.schemas import HealthResponse  # noqa: E402
+from backend.config import settings  # noqa: E402
 from backend.constants import MAX_UPLOAD_SIZE_BYTES, MAX_UPLOAD_SIZE_MB  # noqa: E402
 from backend.db.database import init_db  # noqa: E402
 from backend.logging_config import setup_logging  # noqa: E402
@@ -48,7 +49,7 @@ async def lifespan(app: FastAPI):
 app = FastAPI(
     title="Log Analyzer Toolkit API",
     description="REST API for analyzing and troubleshooting log files",
-    version="0.2.1",
+    version=settings.app_version,
     docs_url="/docs",
     redoc_url="/redoc",
     lifespan=lifespan,
@@ -61,11 +62,7 @@ app.add_exception_handler(RateLimitExceeded, _rate_limit_exceeded_handler)
 # Configure CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=[
-        "http://localhost:5173",  # Vite dev server
-        "http://localhost:3000",  # Alternative frontend port
-        "http://localhost:8080",  # Another common port
-    ],
+    allow_origins=settings.cors_origins,
     allow_credentials=True,
     allow_methods=["GET", "POST", "DELETE", "OPTIONS"],
     allow_headers=["Content-Type", "X-API-Key", "Authorization"],
@@ -103,7 +100,7 @@ async def health_check():
     Returns:
         HealthResponse: Current health status and version
     """
-    return HealthResponse(status="healthy", version="0.2.1", timestamp=datetime.now(timezone.utc))
+    return HealthResponse(status="healthy", version=settings.app_version, timestamp=datetime.now(timezone.utc))
 
 
 # Root endpoint
