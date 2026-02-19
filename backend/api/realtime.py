@@ -162,6 +162,7 @@ async def websocket_tail_logs(
     websocket: WebSocket,
     analysis_id: str = Query(..., description="Analysis UUID to tail"),
     filter: Optional[str] = Query(None, description="Regex filter"),
+    token: Optional[str] = Query(None, description="API Key for authentication"),
 ):
     """
     WebSocket endpoint for real-time log tailing.
@@ -169,8 +170,22 @@ async def websocket_tail_logs(
     Query Params:
     - analysis_id: UUID of the analysis (resolves file path via DB)
     - filter: Optional regex pattern to filter lines
+    - token: Optional API key for authentication
     """
     await websocket.accept()
+
+    # Check authentication
+    import os
+
+    from backend.constants import LOG_ANALYZER_API_KEY
+
+    expected_key = os.getenv(LOG_ANALYZER_API_KEY)
+    if expected_key:
+        api_key = token or websocket.headers.get("x-api-key")
+        if not api_key or api_key != expected_key:
+            await websocket.send_json({"error": "Unauthorized: Invalid or missing API key"})
+            await websocket.close(code=1008)
+            return
 
     # Resolve file path from analysis ID via database lookup
     db = SessionLocal()
@@ -411,6 +426,7 @@ async def websocket_replay_logs(
     websocket: WebSocket,
     analysis_id: str = Query(..., description="Analysis UUID to replay"),
     filter: Optional[str] = Query(None, description="Regex filter"),
+    token: Optional[str] = Query(None, description="API Key for authentication"),
 ):
     """
     WebSocket endpoint for replaying a log file with parsed, structured output.
@@ -425,6 +441,19 @@ async def websocket_replay_logs(
     - {"cmd": "jump", "value": <line_number>}
     """
     await websocket.accept()
+
+    # Check authentication
+    import os
+
+    from backend.constants import LOG_ANALYZER_API_KEY
+
+    expected_key = os.getenv(LOG_ANALYZER_API_KEY)
+    if expected_key:
+        api_key = token or websocket.headers.get("x-api-key")
+        if not api_key or api_key != expected_key:
+            await websocket.send_json({"type": "error", "error": "Unauthorized: Invalid or missing API key"})
+            await websocket.close(code=1008)
+            return
 
     # Resolve file path and format from analysis
     db = SessionLocal()
