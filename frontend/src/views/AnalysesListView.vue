@@ -112,6 +112,18 @@
         </button>
       </div>
     </div>
+
+    <!-- Custom Delete Modal -->
+    <div v-if="itemToDelete" class="modal-overlay">
+      <div class="modal-content">
+        <h3>Confirm Deletion</h3>
+        <p>Are you sure you want to delete analysis "{{ itemToDelete.filename }}"?</p>
+        <div class="modal-actions">
+          <button @click="itemToDelete = null" class="cancel-btn">Cancel</button>
+          <button @click="executeDelete" class="confirm-btn">Delete</button>
+        </div>
+      </div>
+    </div>
   </div>
 </template>
 
@@ -130,6 +142,7 @@ const formatFilter = ref('')
 const searchQuery = ref('')
 const showErrorsOnly = ref(false)
 const availableFormats = ref([])
+const itemToDelete = ref(null)
 
 let searchTimeout = null
 const debouncedSearch = () => {
@@ -212,11 +225,16 @@ const goToPage = (page) => {
   filterAnalyses()
 }
 
-const confirmDelete = async (analysis) => {
-  if (!confirm(`Delete analysis "${analysis.filename}"?`)) return
+const confirmDelete = (analysis) => {
+  itemToDelete.value = analysis
+}
+
+const executeDelete = async () => {
+  if (!itemToDelete.value) return
 
   try {
-    await deleteAnalysis(analysis.id)
+    await deleteAnalysis(itemToDelete.value.id)
+    itemToDelete.value = null
     await loadAnalyses()
   } catch (err) {
     console.error('Delete failed:', err)
@@ -524,5 +542,79 @@ onMounted(() => {
 .page-info {
   font-size: 13px;
   color: var(--color-text-muted);
+}
+
+/* Modal */
+.modal-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100vw;
+  height: 100vh;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+}
+
+.modal-content {
+  background: var(--color-bg-primary);
+  border: 1px solid var(--color-border);
+  padding: 24px;
+  border-radius: var(--radius-lg);
+  width: 90%;
+  max-width: 400px;
+  text-align: center;
+  box-shadow: var(--shadow-xl);
+}
+
+.modal-content h3 {
+  margin: 0 0 12px 0;
+  font-size: 1.25rem;
+}
+
+.modal-content p {
+  color: var(--color-text-muted);
+  font-size: 0.95rem;
+  margin-bottom: 24px;
+}
+
+.modal-actions {
+  display: flex;
+  justify-content: center;
+  gap: 12px;
+}
+
+.cancel-btn {
+  padding: 8px 16px;
+  background: var(--color-bg-tertiary);
+  border: none;
+  border-radius: var(--radius-md);
+  color: var(--color-text);
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.cancel-btn:hover {
+  background: var(--color-border);
+}
+
+.confirm-btn {
+  padding: 8px 16px;
+  background: var(--color-error);
+  border: none;
+  border-radius: var(--radius-md);
+  color: white;
+  font-size: 13px;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all var(--transition-fast);
+}
+
+.confirm-btn:hover {
+  background: #dc2626; /* Darker red */
 }
 </style>
