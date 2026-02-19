@@ -1,29 +1,32 @@
 """
 Shared constants for Backend API.
 
-This module defines configuration constants used throughout the backend
-to avoid magic numbers and ensure consistency.
+Values are sourced from the unified Settings object so they can be
+overridden via environment variables or .env file, while keeping
+backward-compatible module-level names.
 """
 
+from backend.config import settings
+
 # File upload limits
-MAX_UPLOAD_SIZE_BYTES = 100 * 1024 * 1024  # 100MB maximum upload size
-MAX_UPLOAD_SIZE_MB = 100  # For display purposes
+MAX_UPLOAD_SIZE_BYTES = settings.max_upload_size_bytes
+MAX_UPLOAD_SIZE_MB = settings.max_upload_size_mb
 
 # Analysis defaults
-DEFAULT_MAX_ERRORS = 100  # Default maximum errors to collect during analysis
-MAX_ERRORS_LIMIT = 1000  # Hard limit for max_errors parameter
-MIN_ERRORS_LIMIT = 1  # Minimum value for max_errors parameter
+DEFAULT_MAX_ERRORS = settings.default_max_errors
+MAX_ERRORS_LIMIT = settings.max_errors_limit
+MIN_ERRORS_LIMIT = settings.min_errors_limit
 
 # Triage defaults
-DEFAULT_TRIAGE_MAX_ERRORS = 50  # Default maximum errors to analyze during triage
+DEFAULT_TRIAGE_MAX_ERRORS = settings.default_triage_max_errors
 
 # Pagination defaults
-DEFAULT_PAGE_SIZE = 20  # Default number of results per page
-MAX_PAGE_SIZE = 100  # Maximum results per page
-MIN_PAGE_SIZE = 1  # Minimum results per page
+DEFAULT_PAGE_SIZE = settings.default_page_size
+MAX_PAGE_SIZE = settings.max_page_size
+MIN_PAGE_SIZE = settings.min_page_size
 
 # Upload directory
-UPLOAD_DIRECTORY = "./uploads"  # Directory for uploaded log files
+UPLOAD_DIRECTORY = settings.upload_directory
 
 # Authentication
 LOG_ANALYZER_API_KEY = "LOG_ANALYZER_API_KEY"  # Env var name for API key

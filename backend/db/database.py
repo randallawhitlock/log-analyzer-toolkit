@@ -4,13 +4,13 @@ Database connection and session management.
 Provides SQLAlchemy engine, session factory, and base model class.
 """
 
-import os
-
 from sqlalchemy import create_engine
 from sqlalchemy.orm import DeclarativeBase, sessionmaker
 
-# Database URL: configurable via env var, defaults to SQLite for dev
-DATABASE_URL = os.getenv("DATABASE_URL", "sqlite:///./log_analyzer.db")
+from backend.config import settings
+
+# Database URL from unified settings
+DATABASE_URL = settings.database_url
 
 # SQLite needs check_same_thread=False; PostgreSQL does not
 connect_args = {"check_same_thread": False} if DATABASE_URL.startswith("sqlite") else {}
