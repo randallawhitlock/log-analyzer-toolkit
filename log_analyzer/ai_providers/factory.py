@@ -60,6 +60,13 @@ def _register_providers():
     except Exception as e:
         logger.error(f"Unexpected error importing Ollama provider: {e}", exc_info=True)
 
+    try:
+        from .dummy_provider import DummyProvider
+        _PROVIDER_REGISTRY["dummy"] = DummyProvider
+        logger.debug("Registered provider: dummy")
+    except Exception as e:
+        logger.error(f"Unexpected error importing Dummy provider: {e}", exc_info=True)
+
     logger.info(f"Registered {len(_PROVIDER_REGISTRY)} AI provider(s): {list(_PROVIDER_REGISTRY.keys())}")
 
 
@@ -159,9 +166,9 @@ def get_provider(
         return provider
 
     # Auto-detect best available provider
-    # Priority: Configured default > Anthropic > Gemini > Ollama
+    # Priority: Configured default > Anthropic > Gemini > Ollama > Dummy
     logger.debug("Auto-detecting best available provider...")
-    priority_order = ["anthropic", "gemini", "ollama"]
+    priority_order = ["anthropic", "gemini", "ollama", "dummy"]
 
     # Check configured default first
     default_provider = get_config().default_provider

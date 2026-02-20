@@ -33,10 +33,19 @@
           <button @click="toggleLiveTail" class="live-btn" :class="{ active: showLiveTail }">
             {{ showLiveTail ? '✕ Close Viewer' : '▶ Log Viewer' }}
           </button>
-          <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn" :class="{'scanning': triageLoading}">
-            <div v-if="triageLoading" class="scanline"></div>
-            {{ triageLoading ? 'Analyzing Logs...' : '🤖 Run AI Triage' }}
-          </button>
+          <div class="triage-group">
+            <select v-model="selectedProvider" class="provider-select" :disabled="triageLoading">
+              <option value="auto">Auto-detect API Keys</option>
+              <option value="dummy">Demo (No API Key Required)</option>
+              <option value="anthropic">Anthropic Claude</option>
+              <option value="gemini">Google Gemini</option>
+              <option value="ollama">Local Ollama</option>
+            </select>
+            <button @click="runTriageAnalysis" :disabled="triageLoading" class="triage-btn" :class="{'scanning': triageLoading}">
+              <div v-if="triageLoading" class="scanline"></div>
+              {{ triageLoading ? 'Analyzing Logs...' : '🤖 Run AI Triage' }}
+            </button>
+          </div>
           <button @click="deleteCurrentAnalysis" class="delete-btn" title="Delete analysis">
             🗑️
           </button>
@@ -177,7 +186,7 @@
             <div v-if="issue.evidence && issue.evidence.length > 0" class="issue-evidence">
               <strong>📋 Evidence:</strong>
               <ul class="evidence-list">
-                <li v-for="(item, i) in issue.evidence" :key="i">{{ item }}</li>
+                <li v-for="(item, i) in toArray(issue.evidence)" :key="i">{{ item }}</li>
               </ul>
             </div>
             <div v-if="issue.recommendation" class="issue-recommendation">
@@ -266,6 +275,7 @@ const logSamples = ref([])
 const deepDiveLoading = ref({})
 const deepDiveResults = ref({})
 const showDeleteModal = ref(false)
+const selectedProvider = ref('auto')
 let pollInterval = null
 
 const topErrors = computed(() => {
@@ -315,10 +325,18 @@ const formatCategory = (category) => {
   return category.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
 }
 
+/** Ensure a value is always an array (handles string evidence from old DB records). */
+const toArray = (val) => {
+  if (Array.isArray(val)) return val
+  if (typeof val === 'string') return [val]
+  return []
+}
+
 const runTriageAnalysis = async () => {
   try {
     triageLoading.value = true
-    const result = await runTriage(route.params.id)
+    const providerParam = selectedProvider.value === 'auto' ? undefined : selectedProvider.value
+    const result = await runTriage(route.params.id, providerParam)
     triage.value = result
     // Reset deep dive results when re-running triage
     deepDiveLoading.value = {}
@@ -341,6 +359,7 @@ const runDeepDive = async (idx, issue) => {
       issue_severity: issue.severity || 'MEDIUM',
       issue_recommendation: issue.recommendation || '',
       affected_components: issue.affected_components || [],
+      provider: selectedProvider.value === 'auto' ? undefined : selectedProvider.value
     })
     deepDiveResults.value = { ...deepDiveResults.value, [idx]: result }
   } catch (err) {
@@ -588,6 +607,31 @@ onUnmounted(() => {
 .header-actions {
   display: flex;
   gap: 6px;
+}
+
+.triage-group {
+  display: flex;
+  gap: 6px;
+  background: var(--color-bg-tertiary);
+  padding: 4px;
+  border-radius: var(--radius-md);
+  border: 1px solid var(--color-border);
+}
+
+.provider-select {
+  background: transparent;
+  color: var(--color-text);
+  border: none;
+  font-size: 13px;
+  font-weight: 500;
+  padding: 0 10px;
+  border-radius: var(--radius-sm);
+  outline: none;
+  cursor: pointer;
+}
+
+.provider-select:focus {
+  background: var(--color-bg-secondary);
 }
 
 .triage-btn,

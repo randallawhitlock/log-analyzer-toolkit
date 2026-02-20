@@ -1,3 +1,6 @@
+# Production Docker Compose
+# Usage: docker compose -f docker-compose.prod.yml up --build -d
+
 services:
   backend:
     build:
@@ -6,19 +9,16 @@ services:
     ports:
       - "8000:8000"
     volumes:
-      - ./backend/uploads:/app/backend/uploads
-      - ./backend:/app/backend
-      - ./log_analyzer:/app/log_analyzer
+      - upload_data:/app/backend/uploads
     environment:
       - LOG_ANALYZER_MAX_WORKERS=4
-    command: uvicorn backend.main:app --host 0.0.0.0 --port 8000 --reload
+    restart: unless-stopped
     healthcheck:
       test: [ "CMD", "curl", "-f", "http://localhost:8000/health" ]
       interval: 30s
       timeout: 5s
       retries: 3
       start_period: 10s
-    restart: unless-stopped
     networks:
       - log-analyzer-net
 
@@ -27,13 +27,10 @@ services:
       context: ./frontend
       dockerfile: Dockerfile
     ports:
-      - "5173:5173"
-    volumes:
-      - ./frontend:/app
-      - /app/node_modules
-    command: npm run dev -- --host 0.0.0.0
+      - "80:80"
     depends_on:
-      - backend
+      backend:
+        condition: service_healthy
     restart: unless-stopped
     networks:
       - log-analyzer-net
@@ -41,3 +38,6 @@ services:
 networks:
   log-analyzer-net:
     driver: bridge
+
+volumes:
+  upload_data:

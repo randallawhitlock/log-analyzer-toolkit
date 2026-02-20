@@ -1,36 +1,26 @@
-# Stage 1: Build the Vue application
-FROM node:22-alpine as build-stage
+# Build the Vue/Vite frontend for production, serve via Nginx
+FROM node:20-alpine AS build
 
-# Set working directory
 WORKDIR /app
 
-# Copy package.json and package-lock.json
 COPY package*.json ./
-
-# Install dependencies
 RUN npm ci
 
-# Copy source code
 COPY . .
-
-# Development stage
-FROM build-stage as development
-CMD ["npm", "run", "dev", "--", "--host"]
-
-# Build the application
 RUN npm run build
 
-# Stage 2: Serve the application with Nginx
-FROM nginx:alpine as production-stage
+# Production stage — serve static files via Nginx
+FROM nginx:alpine
 
-# Copy built files from build-stage to Nginx directory
-COPY --from=build-stage /app/dist /usr/share/nginx/html
+COPY --from=build /app/dist /usr/share/nginx/html
 
-# Copy nginx config
-COPY nginx.conf /etc/nginx/conf.d/default.conf
+# Non-root user for security
+RUN addgroup -S appgroup && adduser -S appuser -G appgroup && \
+    chown -R appuser:appgroup /usr/share/nginx/html /var/cache/nginx /var/log/nginx && \
+    touch /var/run/nginx.pid && chown appuser:appgroup /var/run/nginx.pid
 
-# Expose port 80
+USER appuser
+
 EXPOSE 80
 
-# Start Nginx
 CMD ["nginx", "-g", "daemon off;"]
