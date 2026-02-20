@@ -60,8 +60,16 @@ def client(test_engine):
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
+    
+    # Patch SessionLocal for background tasks that bypass dependency_overrides
+    import backend.db.database as db_module
+    original_session_local = db_module.SessionLocal
+    db_module.SessionLocal = TestSessionLocal
+    
     client = TestClient(app)
     yield client
+    
+    db_module.SessionLocal = original_session_local
     app.dependency_overrides.clear()
 
 
@@ -102,17 +110,29 @@ def test_analyze_log_file(client, sample_log_file):
         files={"file": ("test.log", sample_log_file, "text/plain")}
     )
 
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
 
     # Check response structure
     assert "id" in data
     assert data["filename"] == "test.log"
+    assert data["total_lines"] == 0
+    assert data["detected_format"] == "pending"
+    assert "created_at" in data
+
+    # Wait for processing to complete
+    import time
+    analysis_id = data["id"]
+    for _ in range(10):
+        resp = client.get(f"/api/v1/analysis/{analysis_id}")
+        data = resp.json()
+        if data["detected_format"] != "pending":
+            break
+        time.sleep(0.1)
+
     assert data["total_lines"] == 5
     assert data["parsed_lines"] >= 4
-    assert "detected_format" in data
     assert "level_counts" in data
-    assert "created_at" in data
 
     # Cleanup
     analysis_id = data["id"]
@@ -127,9 +147,9 @@ def test_analyze_with_parameters(client, sample_log_file):
         files={"file": ("test.log", sample_log_file, "text/plain")}
     )
 
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
-    assert data["total_lines"] == 5
+    assert data["total_lines"] == 0
 
     # Cleanup
     cleanup_response = client.delete(f"/api/v1/analysis/{data['id']}")
@@ -157,7 +177,7 @@ def test_list_analyses_with_results(client, sample_log_file):
             "/api/v1/analyze",
             files={"file": (f"test{i}.log", sample_log_file, "text/plain")}
         )
-        assert response.status_code == 201
+        assert response.status_code == 202
         analysis_ids.append(response.json()["id"])
 
     # List analyses
@@ -201,7 +221,7 @@ def test_get_analysis(client, sample_log_file):
 
 def test_get_analysis_not_found(client):
     """Test getting non-existent analysis."""
-    response = client.get("/api/v1/analysis/non-existent-id")
+    response = client.get("/api/v1/analysis/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
 
 
@@ -226,7 +246,7 @@ def test_delete_analysis(client, sample_log_file):
 
 def test_delete_analysis_not_found(client):
     """Test deleting non-existent analysis."""
-    response = client.delete("/api/v1/analysis/non-existent-id")
+    response = client.delete("/api/v1/analysis/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
 
 
@@ -268,7 +288,7 @@ def test_run_triage_analysis_not_found(client, monkeypatch):
 
     # Mock the TriageService to avoid AI provider requirement
     mock_service = Mock()
-    mock_service.run_triage_on_analysis.side_effect = ValueError("Analysis non-existent-id not found")
+    mock_service.run_triage_on_analysis.side_effect = ValueError("Analysis 00000000-0000-0000-0000-000000000000 not found")
 
     def mock_init(self, provider_name=None):
         return None
@@ -278,7 +298,7 @@ def test_run_triage_analysis_not_found(client, monkeypatch):
 
     response = client.post(
         "/api/v1/triage",
-        json={"analysis_id": "non-existent-id"}
+        json={"analysis_id": "00000000-0000-0000-0000-000000000000"}
     )
     assert response.status_code == 404
 
@@ -311,13 +331,13 @@ def test_get_triage(client, sample_log_file):
 
 def test_get_triage_not_found(client):
     """Test getting non-existent triage."""
-    response = client.get("/api/v1/triage/non-existent-id")
+    response = client.get("/api/v1/triage/00000000-0000-0000-0000-000000000000")
     assert response.status_code == 404
 
 
 def test_get_triages_for_analysis_not_found(client):
     """Test getting triages for non-existent analysis."""
-    response = client.get("/api/v1/analysis/non-existent-id/triages")
+    response = client.get("/api/v1/analysis/00000000-0000-0000-0000-000000000000/triages")
     assert response.status_code == 404
 
 
@@ -369,10 +389,10 @@ def test_analyze_invalid_file_type(client):
     )
 
     # Should still process (might detect as 'universal' format or fail gracefully)
-    assert response.status_code in [201, 400, 500]
+    assert response.status_code in [202, 400, 500]
 
     # Cleanup if created
-    if response.status_code == 201:
+    if response.status_code == 202:
         client.delete(f"/api/v1/analysis/{response.json()['id']}")
 
 
@@ -386,7 +406,7 @@ def test_analyze_empty_file(client):
     )
 
     # Should handle empty file
-    assert response.status_code == 201
+    assert response.status_code == 202
     data = response.json()
     assert data["total_lines"] == 0
 

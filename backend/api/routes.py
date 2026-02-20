@@ -244,24 +244,28 @@ def get_log_preview(
 
 @router.post("/triage", response_model=schemas.TriageResponse, status_code=201)
 @limiter.limit("10/minute")
-def run_triage(request: schemas.TriageRequest, fastapi_request: Request, db: Session = Depends(get_db)):
+def run_triage(body: schemas.TriageRequest, request: Request, db: Session = Depends(get_db)):
     """
     Run AI-powered triage on an analysis.
 
     **Parameters:**
-    - **analysis_id**: UUID of the analysis to triage
-    - **provider**: Optional AI provider (anthropic, gemini, ollama)
+    - **body**: Analysis ID and optional provider
+    - **request**: Request object for rate limiting
 
     **Returns:**
     - Triage results with issues, severity, and recommendations
 
     **Note:** Requires AI provider API keys to be configured
     """
-    logger.info(f"POST /api/v1/triage - analysis_id={request.analysis_id}, provider={request.provider or 'auto'}")
+    logger.info(f"POST /api/v1/triage - analysis_id={body.analysis_id}, provider={body.provider or 'auto'}")
 
     try:
-        service = TriageService(provider_name=request.provider)
-        triage = service.run_triage_on_analysis(db, request.analysis_id, provider_name=request.provider)
+        service = TriageService(provider_name=body.provider)
+        triage = service.run_triage_on_analysis(
+            db,
+            analysis_id=body.analysis_id,
+            provider_name=body.provider,
+        )
         logger.info(f"Triage created successfully: {triage.id}")
         return triage
 
