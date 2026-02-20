@@ -1,7 +1,7 @@
 .PHONY: install test lint format run clean docker-build help
 
 PYTHON := python3
-VENV := venv
+VENV := .venv
 BIN := $(VENV)/bin
 
 help:
@@ -11,7 +11,8 @@ help:
 	@echo "make test         - Run tests with coverage"
 	@echo "make lint         - Run linting (ruff)"
 	@echo "make format       - Run formatting (ruff)"
-	@echo "make run          - Run application via Docker"
+	@echo "make run          - Run application via Docker (dev)"
+	@echo "make prod         - Run application via Docker (production)"
 	@echo "make clean        - Remove build artifacts"
 
 install:
@@ -21,7 +22,7 @@ install:
 	$(BIN)/pre-commit install
 
 test:
-	$(BIN)/pytest
+	$(BIN)/pytest tests/ backend/tests/
 
 lint:
 	$(BIN)/ruff check .
@@ -30,7 +31,10 @@ format:
 	$(BIN)/ruff format .
 
 run:
-	docker-compose up --build
+	docker compose up --build
+
+prod:
+	docker compose -f docker-compose.prod.yml up --build -d
 
 clean:
 	rm -rf $(VENV)

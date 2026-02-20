@@ -2,9 +2,9 @@ name: CI
 
 on:
   push:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
   pull_request:
-    branches: [ "main" ]
+    branches: [ "main", "dev" ]
 
 jobs:
   backend-lint:
@@ -40,7 +40,7 @@ jobs:
         python -m pip install --upgrade pip
         pip install -e ".[dev]"
     - name: Run Tests
-      run: pytest
+      run: pytest tests/ backend/tests/
 
   frontend-ci:
     runs-on: ubuntu-latest
@@ -64,3 +64,5 @@ jobs:
     - name: Build
       working-directory: frontend
       run: npm run build
+      env:
+        VITE_API_URL: http://localhost:8000
