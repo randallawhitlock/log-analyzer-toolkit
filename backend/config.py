@@ -19,7 +19,7 @@ class Settings(BaseSettings):
     )
 
     # Application
-    app_version: str = "0.4.0"
+    app_version: str = "1.0.0"
     debug: bool = False
 
     # Database

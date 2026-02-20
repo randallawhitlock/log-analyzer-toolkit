@@ -294,8 +294,9 @@ const uploadFile = async (file) => {
 
 .upload-hint {
   margin-top: 16px;
-  color: var(--color-text-dim);
+  color: var(--color-text); /* Maximum contrast */
   font-size: 0.95rem;
+  font-weight: 500;
 }
 
 .supported-formats {
@@ -308,7 +309,7 @@ const uploadFile = async (file) => {
 
 .badge {
   background: var(--color-bg-tertiary);
-  color: var(--color-text-muted);
+  color: var(--color-text); /* Lightened to primary text color */
   padding: 2px 8px;
   border-radius: 4px;
   font-size: 0.75rem;
@@ -318,7 +319,8 @@ const uploadFile = async (file) => {
 
 .limit {
   font-size: 0.75rem;
-  color: var(--color-text-dim);
+  color: var(--color-text); /* Maximum contrast */
+  font-weight: 500;
   margin-left: 4px;
 }
 
