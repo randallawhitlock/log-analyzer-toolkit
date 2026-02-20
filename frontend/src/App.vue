@@ -34,7 +34,7 @@
     </main>
 
     <footer class="main-footer">
-      <p>Log Analyzer Toolkit v1.0.1</p>
+      <p>Log Analyzer Toolkit v1.0.2</p>
     </footer>
   </div>
 </template>
