@@ -186,7 +186,7 @@
             <div v-if="issue.evidence && issue.evidence.length > 0" class="issue-evidence">
               <strong>📋 Evidence:</strong>
               <ul class="evidence-list">
-                <li v-for="(item, i) in issue.evidence" :key="i">{{ item }}</li>
+                <li v-for="(item, i) in toArray(issue.evidence)" :key="i">{{ item }}</li>
               </ul>
             </div>
             <div v-if="issue.recommendation" class="issue-recommendation">
@@ -323,6 +323,13 @@ const truncate = (str, len) => {
 const formatCategory = (category) => {
   if (!category) return ''
   return category.split('_').map(word => word.charAt(0).toUpperCase() + word.slice(1)).join(' ')
+}
+
+/** Ensure a value is always an array (handles string evidence from old DB records). */
+const toArray = (val) => {
+  if (Array.isArray(val)) return val
+  if (typeof val === 'string') return [val]
+  return []
 }
 
 const runTriageAnalysis = async () => {
