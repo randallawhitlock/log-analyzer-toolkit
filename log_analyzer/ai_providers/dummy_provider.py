@@ -106,9 +106,44 @@ class DummyProvider(AIProvider):
         return json.dumps(response, indent=2)
         
     def _generate_deep_dive_response(self) -> str:
-        """Generate a realistic JSON deep dive response."""
-        response = {
-            "detailed_analysis": "Upon deeper simulated inspection, the connection pool exhaustion is specifically tied to the `GET /api/v1/reports` endpoint doing full table scans. \n\n1. **Query Inspection**: The logs indicate slow query times averaging 4.2 seconds right before the timeouts.\n2. **Resource Starvation**: Once all 15 connections in the pool are locked waiting for the slow query to return, all entirely unrelated API paths start failing instantly.\n\n### Resolution Steps\n- Add a compound index on the `reports` table covering `tenant_id` and `created_at`.\n- Implement pagination on the endpoint to limit the max rows returned from 5000 to 50.\n- Implement a circuit breaker pattern in the application tier to fail fast.",
-            "root_cause": "Unindexed database query on a high-traffic reporting endpoint causing connection starvation."
-        }
-        return json.dumps(response, indent=2)
+        """Generate a realistic markdown deep dive response (matches real AI provider output)."""
+        return """## Root Cause Analysis
+
+Upon deeper inspection, the connection pool exhaustion is specifically tied to the `GET /api/v1/reports` endpoint performing **full table scans** on the `reports` table without proper indexing.
+
+**Evidence:**
+- Slow query logs show average query times of **4.2 seconds** immediately before the pool timeouts
+- Once all 15 connections are locked waiting for the slow query, all unrelated API paths begin failing instantly
+- The `reports` table contains ~2.3M rows with no index on `tenant_id` or `created_at`
+
+## Agentic Resolution Plan
+
+1. **Add compound index** on `reports(tenant_id, created_at DESC)` — this covers the most common query pattern
+2. **Implement pagination** — cap the endpoint at 50 rows per request (currently unbounded, returning up to 5,000)
+3. **Add circuit breaker** — fail fast after 3 consecutive pool exhaustion errors
+4. **Connection pool tuning** — increase `pool_size` from 5 to 20 and `max_overflow` from 10 to 30
+
+```sql
+CREATE INDEX CONCURRENTLY idx_reports_tenant_created
+ON reports (tenant_id, created_at DESC);
+```
+
+## Verification Steps
+
+1. Run `EXPLAIN ANALYZE` on the reports query before and after indexing
+2. Load test with 50 concurrent users hitting `/api/v1/reports`
+3. Monitor connection pool metrics via `/health` endpoint
+4. Verify no 503 errors in the next 24-hour window
+
+## Prevention Strategies
+
+- **Alerting**: Set up alerts for connection pool utilization > 80%
+- **Query review**: All new queries must include `EXPLAIN ANALYZE` output in PR
+- **Load testing**: Add `/api/v1/reports` to the CI load test suite
+- **Connection pooling**: Use PgBouncer in production for connection multiplexing
+
+## Related Issues
+
+- The `Missing Static Assets (404s)` issue may be masking additional 503 errors — users seeing a broken page may not realize the backend is also degraded
+- Consider auditing all endpoints for unbounded `SELECT` queries"""
+
