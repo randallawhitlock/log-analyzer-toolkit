@@ -884,10 +884,10 @@ class ApacheAccessParser(BaseParser):
 
         # Determine level based on status code
         status = int(data.get("status", 0))
-        if status >= 500:
+        if status >= 400:
             level = "ERROR"
-        elif status >= 400:
-            level = "WARNING"
+        elif status >= 300:
+            level = "INFO"
         else:
             level = "INFO"
 
@@ -1020,10 +1020,8 @@ class NginxAccessParser(BaseParser):
 
         # Determine level based on status code
         status = int(data.get("status", 0))
-        if status >= 500:
+        if status >= 400:
             level = "ERROR"
-        elif status >= 400:
-            level = "WARNING"
         elif status >= 300:
             level = "INFO"
         else:
@@ -1930,10 +1928,10 @@ class NginxParser(BaseParser):
 
         # Infer level from status code
         status = int(data.get("status", 200))
-        if status >= 500:
+        if status >= 400:
             level = "ERROR"
-        elif status >= 400:
-            level = "WARNING"
+        elif status >= 300:
+            level = "INFO"
         else:
             level = "INFO"
 
