@@ -4,7 +4,7 @@ Unit tests for AI providers.
 Tests use mocked responses to avoid actual API calls during testing.
 """
 
-from unittest.mock import patch, MagicMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -170,24 +170,24 @@ class TestAnthropicProvider:
         mock_anthropic = MagicMock()
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
-        
+
         mock_message = MagicMock()
         mock_message.content = [MagicMock(text="Analysis result")]
         mock_message.usage.input_tokens = 10
         mock_message.usage.output_tokens = 20
         mock_message.model = "claude-3-sonnet"
         mock_client.messages.create.return_value = mock_message
-        
+
         with patch.dict('sys.modules', {'anthropic': mock_anthropic}):
             provider = provider_class()
             # Force client re-init/get
             provider._client = None
             response = provider.analyze("Test prompt", system_prompt="System ctx")
-            
+
             assert response.content == "Analysis result"
             assert response.provider == "anthropic"
             assert response.usage["input_tokens"] == 10
-        
+
             mock_client.messages.create.assert_called_once()
 
     @patch.dict('os.environ', {'ANTHROPIC_API_KEY': 'test-key'})
@@ -196,21 +196,21 @@ class TestAnthropicProvider:
         mock_anthropic = MagicMock()
         mock_client = MagicMock()
         mock_anthropic.Anthropic.return_value = mock_client
-        
+
         # Must mock Exception classes as types, otherwise they default to MagicMock instances
         # which causes TypeError in except blocks
         mock_anthropic.AuthenticationError = type('AuthenticationError', (Exception,), {})
         mock_anthropic.RateLimitError = type('RateLimitError', (Exception,), {})
         mock_anthropic.APIStatusError = type('APIStatusError', (Exception,), {})
-        
+
         error_instance = mock_anthropic.APIStatusError("Something went wrong")
         error_instance.status_code = 500
         mock_client.messages.create.side_effect = error_instance
-        
+
         with patch.dict('sys.modules', {'anthropic': mock_anthropic}):
             provider = provider_class()
             provider._client = None
-            
+
             from log_analyzer.ai_providers.base import AIError
             with pytest.raises(AIError):
                 provider.analyze("prompt")
@@ -262,22 +262,22 @@ class TestGeminiProvider:
         mock_genai = MagicMock()
         mock_model = MagicMock()
         mock_genai.GenerativeModel.return_value = mock_model
-        
+
         mock_response = MagicMock()
         mock_response.text = "Gemini analysis"
         mock_response.usage_metadata.prompt_token_count = 10
         mock_response.usage_metadata.candidates_token_count = 20
-        
+
         mock_model.generate_content.return_value = mock_response
-        
+
         with patch.dict('sys.modules', {'google.generativeai': mock_genai}):
             provider = provider_class()
             response = provider.analyze("prompt")
-            
+
             assert response.content == "Gemini analysis"
             # Gemini provider uses 'prompt_tokens'
             assert response.usage["prompt_tokens"] == 10
-            
+
             mock_model.generate_content.assert_called_once()
 
 
@@ -322,7 +322,7 @@ class TestOllamaProvider:
         mock_httpx = MagicMock()
         mock_client = MagicMock()
         mock_httpx.Client.return_value = mock_client
-        
+
         mock_response = MagicMock()
         mock_response.status_code = 200
         mock_response.json.return_value = {
@@ -333,16 +333,16 @@ class TestOllamaProvider:
             "total_duration": 100000000 # nanoseconds
         }
         mock_client.post.return_value = mock_response
-        
+
         with patch.dict('sys.modules', {'httpx': mock_httpx}):
             provider = provider_class()
             response = provider.analyze("prompt")
-            
+
             assert response.content == "Ollama response"
             assert response.provider == "ollama"
             # Ollama provider maps prompt_eval_count to 'prompt_eval_count' in usage dict
             assert response.usage["prompt_eval_count"] == 5
-            
+
             mock_client.post.assert_called_once()
 
 

@@ -3,12 +3,11 @@ Unit tests for analytics module.
 """
 
 from datetime import datetime, timedelta
-import pytest
 
 from log_analyzer.analytics import (
+    compute_analytics,
     compute_temporal_distribution,
     detect_trend,
-    compute_analytics,
 )
 from log_analyzer.parsers import LogEntry
 from log_analyzer.stats_models import AnalyticsData

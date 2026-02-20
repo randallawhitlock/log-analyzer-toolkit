@@ -2,20 +2,20 @@
 Unit tests for log parsers.
 """
 
-from datetime import datetime, timezone
 import json
+from datetime import timezone
+
 import pytest
 
 from log_analyzer.parsers import (
     AWSCloudWatchParser,
-    GCPCloudLoggingParser,
     AzureMonitorParser,
-    DockerJSONParser,
-    KubernetesParser,
     ContainerdParser,
-    LogEntry,
+    DockerJSONParser,
+    GCPCloudLoggingParser,
+    KubernetesParser,
+    extract_level_from_message,
     parse_cloud_timestamp,
-    extract_level_from_message
 )
 
 # ============================================================================
@@ -73,10 +73,10 @@ class TestAWSCloudWatchParser:
         # JSON format
         assert parser.can_parse('{"logGroup": "/aws/lambda/test", "logEvents": []}')
         assert parser.can_parse('{"message": "Hello", "timestamp": 1234567890, "logGroup": "group1"}')
-        
+
         # Text format
         assert parser.can_parse('2020-01-01T12:00:00.000Z [INFO] Message')
-        
+
         # Invalid
         assert not parser.can_parse('Invalid format')
 
@@ -92,7 +92,7 @@ class TestAWSCloudWatchParser:
             }]
         })
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.timestamp.year == 2020
         assert entry.level == "INFO"
@@ -108,7 +108,7 @@ class TestAWSCloudWatchParser:
             "logGroup": "group1"
         })
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.level == "ERROR"  # Extracted from message
         assert entry.message == "Error occurred"
@@ -117,7 +117,7 @@ class TestAWSCloudWatchParser:
         """Test parsing plain text export format."""
         line = "2020-01-01T12:00:00.000Z [WARNING] Disk usage high"
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.timestamp.year == 2020
         assert entry.level == "WARNING"
@@ -155,7 +155,7 @@ class TestGCPCloudLoggingParser:
             }
         })
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.timestamp.hour == 12
         assert entry.level == "ERROR"
@@ -170,7 +170,7 @@ class TestGCPCloudLoggingParser:
             "jsonPayload": {"message": "Structured log", "user": "admin"}
         })
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.message == "Structured log"
 
@@ -202,7 +202,7 @@ class TestAzureMonitorParser:
             "operationName": "GET /api/data"
         })
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.level == "ERROR"
         assert entry.message == "Exception thrown"
@@ -216,7 +216,7 @@ class TestAzureMonitorParser:
             "Computer": "web-01"
         })
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.level == "WARNING"
         assert entry.message == "Latency high"
@@ -237,10 +237,10 @@ class TestContainerParsers:
             "stream": "stdout",
             "time": "2020-01-01T12:00:00.000Z"
         })
-        
+
         assert parser.can_parse(line)
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.timestamp.year == 2020
         assert entry.message == "Application started"
@@ -251,10 +251,10 @@ class TestContainerParsers:
     def test_kubernetes_cri_parser(self):
         parser = KubernetesParser()
         line = "2020-01-01T12:00:00.000Z stdout F [ERROR] Crash detected"
-        
+
         assert parser.can_parse(line)
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.timestamp.year == 2020
         assert entry.source == "stdout"
@@ -265,10 +265,10 @@ class TestContainerParsers:
         parser = ContainerdParser()
         # Mixed CRI header + JSON content
         line = '2020-01-01T12:00:00.000Z stdout F {"level":"info","msg":"Service up"}'
-        
+
         assert parser.can_parse(line)
         entry = parser.parse(line)
-        
+
         assert entry is not None
         assert entry.level == "INFO"
         assert entry.message == "Service up"

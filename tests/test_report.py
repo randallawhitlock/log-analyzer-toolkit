@@ -6,7 +6,6 @@ import json
 import tempfile
 from datetime import datetime
 from pathlib import Path
-from unittest.mock import MagicMock, patch
 
 import pytest
 
@@ -14,7 +13,6 @@ from log_analyzer.analyzer import AnalysisResult
 from log_analyzer.parsers import LogEntry
 from log_analyzer.report import ReportGenerator
 from log_analyzer.stats_models import AnalyticsData
-
 
 # ---------------------------------------------------------------------------
 # Fixtures

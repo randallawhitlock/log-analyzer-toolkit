@@ -5,25 +5,28 @@ These tests exercise the internal display helpers and edge cases
 in CLI commands to improve cli.py coverage.
 """
 
-from click.testing import CliRunner
-from datetime import datetime, timedelta
+from datetime import datetime
 from io import StringIO
-from unittest.mock import patch, MagicMock
+from unittest.mock import patch
 
 import pytest
+from click.testing import CliRunner
 
-from log_analyzer.cli import (
-    cli, _display_analysis, _display_analytics,
-    _display_hourly_chart, _display_temporal_table,
-)
 from log_analyzer.analyzer import AnalysisResult
+from log_analyzer.cli import (
+    _display_analysis,
+    _display_analytics,
+    _display_hourly_chart,
+    _display_temporal_table,
+    cli,
+)
 from log_analyzer.parsers import LogEntry
 from log_analyzer.stats_models import AnalyticsData
 
 
 @pytest.fixture
 def runner():
-    return CliRunner(mix_stderr=False)
+    return CliRunner()
 
 
 # ---------------------------------------------------------------------------

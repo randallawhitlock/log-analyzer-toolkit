@@ -5,10 +5,11 @@ Unit tests for LogAnalyzer and AnalysisResult.
 from collections import Counter
 from datetime import datetime, timedelta
 from unittest.mock import MagicMock, patch
+
 import pytest
 
-from log_analyzer.analyzer import LogAnalyzer, AnalysisResult
-from log_analyzer.parsers import LogEntry, UniversalFallbackParser
+from log_analyzer.analyzer import AnalysisResult, LogAnalyzer
+from log_analyzer.parsers import UniversalFallbackParser
 
 
 class TestAnalysisResult:
@@ -183,7 +184,8 @@ class TestLogAnalyzer:
 
     def test_detect_format(self):
         """Test standalone format detection method."""
-        import tempfile, os
+        import os
+        import tempfile
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as tf:
             tf.write('{"log": "test", "stream": "stdout", "time": "2020-01-01T00:00:00Z"}\n' * 10)
             tf_path = tf.name
@@ -197,7 +199,8 @@ class TestLogAnalyzer:
 
     def test_detect_format_unknown(self):
         """Test detection returns None for unrecognizable formats."""
-        import tempfile, os
+        import os
+        import tempfile
         with tempfile.NamedTemporaryFile(mode='w', delete=False, suffix='.log') as tf:
             tf.write('xyzzy\n' * 100)
             tf_path = tf.name

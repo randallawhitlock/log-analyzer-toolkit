@@ -17,7 +17,7 @@ from log_analyzer.cli import _display_triage, cli
 
 @pytest.fixture
 def runner():
-    return CliRunner(mix_stderr=False)
+    return CliRunner()
 
 
 # ---------------------------------------------------------------------------
