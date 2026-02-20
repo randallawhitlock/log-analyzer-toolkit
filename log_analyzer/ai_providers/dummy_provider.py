@@ -10,7 +10,7 @@ import random
 import time
 from typing import Dict, Any, List
 
-from .base import AIProvider, AIError
+from .base import AIProvider, AIError, AIResponse
 
 logger = logging.getLogger(__name__)
 
@@ -36,7 +36,7 @@ class DummyProvider(AIProvider):
         """Get the current model name."""
         return self.model
 
-    def analyze(self, prompt: str, system_prompt: str = None) -> str:
+    def analyze(self, prompt: str, system_prompt: str = None) -> AIResponse:
         """
         Simulate an AI analysis by returning a hardcoded payload.
 
@@ -45,17 +45,25 @@ class DummyProvider(AIProvider):
             system_prompt: Optional system instruction
 
         Returns:
-            JSON string simulating the expected Log Analyzer output
+            AIResponse simulating the expected Log Analyzer output
         """
         # Simulate network latency and "thinking" time
         logger.info(f"DummyProvider processing request (prompt length: {len(prompt)})")
-        time.sleep(random.uniform(1.0, 2.5))
+        latency_seconds = random.uniform(1.0, 2.5)
+        time.sleep(latency_seconds)
 
         # Check if this is a deep dive
         if "deep-dive analysis" in prompt or "deep dive" in prompt.lower():
-            return self._generate_deep_dive_response()
+            content = self._generate_deep_dive_response()
+        else:
+            content = self._generate_triage_response()
             
-        return self._generate_triage_response()
+        return AIResponse(
+            content=content,
+            model=self.model,
+            provider="dummy",
+            latency_ms=latency_seconds * 1000
+        )
 
     def _generate_triage_response(self) -> str:
         """Generate a realistic JSON triage response."""
@@ -73,7 +81,11 @@ class DummyProvider(AIProvider):
                     "recommendation": "1. Increase the maximum connection pool size. 2. Investigate long-running queries in the database.",
                     "root_cause_analysis": "The system experienced a burst of traffic which exhausted the available database connections, causing cascading failures for subsequent requests.",
                     "category": "performance",
-                    "evidence": "ERROR: sqlalchemy.exc.TimeoutError: QueuePool limit of size 5 overflow 10 reached"
+                    "evidence": [
+                        "ERROR: sqlalchemy.exc.TimeoutError: QueuePool limit of size 5 overflow 10 reached",
+                        "WARNING: Connection pool nearing capacity (14/15 active)",
+                        "Correlated with traffic spike at 14:30-14:45 UTC"
+                    ]
                 },
                 {
                     "title": "Missing Static Assets (404s)",
@@ -84,7 +96,10 @@ class DummyProvider(AIProvider):
                     "recommendation": "Ensure all required static assets are correctly built and deployed to the CDN or web server root.",
                     "root_cause_analysis": "Likely a deployment artifact issue where some static files were not copied over during the last CI/CD run.",
                     "category": "configuration",
-                    "evidence": "GET /favicon.ico HTTP/1.1 404 153"
+                    "evidence": [
+                        "GET /favicon.ico HTTP/1.1 404 153",
+                        "GET /assets/legacy-style.css HTTP/1.1 404 162"
+                    ]
                 }
             ]
         }

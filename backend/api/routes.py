@@ -278,7 +278,7 @@ def run_triage(body: schemas.TriageRequest, request: Request, db: Session = Depe
             status_code=503, detail=f"AI Service Unavailable: {str(e)}. Please configure API keys or start Ollama."
         ) from e
     except Exception as e:
-        logger.error(f"Triage failed for analysis {request.analysis_id}: {e}", exc_info=True)
+        logger.error(f"Triage failed for analysis {body.analysis_id}: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Triage failed due to an internal error") from e
 
 
