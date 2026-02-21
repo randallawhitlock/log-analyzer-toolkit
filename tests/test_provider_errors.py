@@ -7,18 +7,20 @@ These tests are designed to close remaining coverage gaps toward 90%.
 
 import json
 import os
-import time
-from datetime import datetime
-from collections import Counter
-from unittest.mock import patch, MagicMock, PropertyMock
+from unittest.mock import MagicMock, patch
 
 import pytest
 
 from log_analyzer.ai_providers.base import (
-    AIResponse, TriageResult, TriageIssue, Severity,
-    AIError, AuthenticationError, RateLimitError, ProviderNotAvailableError,
+    AIError,
+    AIResponse,
+    AuthenticationError,
+    ProviderNotAvailableError,
+    RateLimitError,
+    Severity,
+    TriageIssue,
+    TriageResult,
 )
-
 
 # =========================================================================
 # Gemini Provider: Error paths & fallback models
@@ -526,6 +528,7 @@ class TestAnalyzerInlineDetection:
     def test_single_threaded_inline_detection(self):
         """Test analyze with explicit parser to exercise single-threaded path."""
         import tempfile
+
         from log_analyzer.analyzer import LogAnalyzer
         from log_analyzer.parsers import JSONLogParser
 
@@ -552,6 +555,7 @@ class TestAnalyzerInlineDetection:
     def test_single_threaded_with_max_errors(self):
         """Test analyze respects error collection limits."""
         import tempfile
+
         from log_analyzer.analyzer import LogAnalyzer
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
@@ -575,6 +579,7 @@ class TestAnalyzerInlineDetection:
     def test_analyze_with_warnings(self):
         """Test warnings are tracked correctly."""
         import tempfile
+
         from log_analyzer.analyzer import LogAnalyzer
 
         with tempfile.NamedTemporaryFile(mode='w', suffix='.log', delete=False) as f:
@@ -614,19 +619,21 @@ class TestConfigEdgeCases:
 
     def test_save_and_load_config(self):
         import tempfile
-        from log_analyzer.config import Config, save_config, load_config
+
+        from log_analyzer.config import Config, load_config
         with tempfile.TemporaryDirectory() as tmpdir:
-            config_file = os.path.join(tmpdir, "test_config.yaml")
-            config = Config()
+            os.path.join(tmpdir, "test_config.yaml")
+            Config()
             # save_config may or may not accept a path arg
             # just test the basic flow
             loaded = load_config()
             assert loaded is not None
 
     def test_check_config_permissions(self):
-        from log_analyzer.config import check_config_permissions
-        from pathlib import Path
         import tempfile
+        from pathlib import Path
+
+        from log_analyzer.config import check_config_permissions
         with tempfile.NamedTemporaryFile(delete=False) as f:
             f.write(b"test")
             path = f.name

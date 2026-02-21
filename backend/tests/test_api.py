@@ -60,15 +60,15 @@ def client(test_engine):
             db.close()
 
     app.dependency_overrides[get_db] = override_get_db
-    
+
     # Patch SessionLocal for background tasks that bypass dependency_overrides
     import backend.db.database as db_module
     original_session_local = db_module.SessionLocal
     db_module.SessionLocal = TestSessionLocal
-    
+
     client = TestClient(app)
     yield client
-    
+
     db_module.SessionLocal = original_session_local
     app.dependency_overrides.clear()
 

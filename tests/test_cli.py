@@ -2,19 +2,19 @@
 Comprehensive unit tests for CLI commands.
 """
 
-from click.testing import CliRunner
-from unittest.mock import patch, MagicMock, PropertyMock
 from datetime import datetime
-import json
-import pytest
+from unittest.mock import MagicMock, patch
 
-from log_analyzer.cli import cli
+import pytest
+from click.testing import CliRunner
+
 from log_analyzer.analyzer import AnalysisResult
+from log_analyzer.cli import cli
 
 
 @pytest.fixture
 def runner():
-    return CliRunner(mix_stderr=False)
+    return CliRunner()
 
 
 def _make_result(**overrides):

@@ -8,16 +8,18 @@ import json
 import os
 import tempfile
 from datetime import datetime, timedelta
-from collections import Counter
-from unittest.mock import patch, MagicMock
 
 import pytest
 
 from log_analyzer.parsers import (
-    LogEntry, JSONLogParser, ApacheAccessParser, ApacheErrorParser,
-    NginxAccessParser, SyslogParser, UniversalFallbackParser,
+    ApacheAccessParser,
+    ApacheErrorParser,
+    JSONLogParser,
+    LogEntry,
+    NginxAccessParser,
+    SyslogParser,
+    UniversalFallbackParser,
 )
-
 
 # =========================================================================
 # Analyzer: inline detection (requires 100+ lines, no explicit parser)

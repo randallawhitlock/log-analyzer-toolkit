@@ -1,19 +1,14 @@
 """
 Targeted parser utility tests to cross 90% coverage threshold.
-Covers: parse_cloud_timestamp edge cases, extract_level_from_message, 
+Covers: parse_cloud_timestamp edge cases, extract_level_from_message,
 Azure Monitor parser, and cloud log parser patterns.
 """
 
 import json
-from datetime import datetime
-from unittest.mock import patch
-
-import pytest
 
 from log_analyzer.parsers import (
-    parse_cloud_timestamp,
     extract_level_from_message,
-    LogEntry,
+    parse_cloud_timestamp,
 )
 
 
@@ -119,7 +114,7 @@ class TestAzureMonitorParser:
             "level": "Warning",
             "message": "Azure array test",
         }])
-        result = parser.parse(line)
+        parser.parse(line)
         # Should handle array format
 
     def test_azure_monitor_can_parse(self):

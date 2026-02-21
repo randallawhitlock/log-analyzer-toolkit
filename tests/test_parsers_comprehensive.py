@@ -7,39 +7,37 @@ parsers to close the gap in parsers.py coverage.
 """
 
 import json
-from datetime import datetime
 
 import pytest
 
 from log_analyzer.parsers import (
-    AWSCloudWatchParser,
-    AzureMonitorParser,
-    GCPCloudLoggingParser,
-    DockerJSONParser,
-    KubernetesParser,
-    ContainerdParser,
+    AndroidParser,
     ApacheAccessParser,
     ApacheErrorParser,
+    AWSCloudWatchParser,
+    AzureMonitorParser,
+    ContainerdParser,
+    DockerJSONParser,
+    GCPCloudLoggingParser,
+    HDFSParser,
+    HealthAppParser,
+    HPCParser,
+    JavaLogParser,
+    JSONLogParser,
+    KubernetesParser,
+    LogEntry,
     NginxAccessParser,
     NginxParser,
-    JSONLogParser,
-    SyslogParser,
-    AndroidParser,
-    JavaLogParser,
-    HDFSParser,
-    SupercomputerParser,
-    WindowsEventParser,
-    ProxifierParser,
-    HPCParser,
-    HealthAppParser,
     OpenStackParser,
+    ProxifierParser,
     SquidParser,
+    SupercomputerParser,
+    SyslogParser,
     UniversalFallbackParser,
-    LogEntry,
-    parse_cloud_timestamp,
+    WindowsEventParser,
     extract_level_from_message,
+    parse_cloud_timestamp,
 )
-
 
 # ---------------------------------------------------------------------------
 # Utility functions

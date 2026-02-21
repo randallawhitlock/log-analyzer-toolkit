@@ -8,9 +8,8 @@ import json
 import logging
 import random
 import time
-from typing import Dict, Any, List
 
-from .base import AIProvider, AIError, AIResponse
+from .base import AIProvider, AIResponse
 
 logger = logging.getLogger(__name__)
 
@@ -57,7 +56,7 @@ class DummyProvider(AIProvider):
             content = self._generate_deep_dive_response()
         else:
             content = self._generate_triage_response()
-            
+
         return AIResponse(
             content=content,
             model=self.model,
@@ -104,7 +103,7 @@ class DummyProvider(AIProvider):
             ]
         }
         return json.dumps(response, indent=2)
-        
+
     def _generate_deep_dive_response(self) -> str:
         """Generate a realistic markdown deep dive response (matches real AI provider output)."""
         return """## Root Cause Analysis

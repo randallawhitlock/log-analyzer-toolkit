@@ -3,25 +3,22 @@ Comprehensive unit tests for triage module.
 """
 
 import json
-import time
 from datetime import datetime
 from unittest.mock import MagicMock, patch
 
 import pytest
 
-from log_analyzer.analyzer import AnalysisResult
 from log_analyzer.ai_providers.base import AIResponse
+from log_analyzer.analyzer import AnalysisResult
 from log_analyzer.parsers import LogEntry
 from log_analyzer.triage import (
+    Severity,
     TriageEngine,
     TriageResult,
-    TriageIssue,
-    Severity,
     build_triage_prompt,
     parse_triage_response,
     quick_triage,
 )
-
 
 # ---------------------------------------------------------------------------
 # Fixtures
