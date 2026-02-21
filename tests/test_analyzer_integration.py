@@ -11,9 +11,8 @@ from datetime import datetime
 
 import pytest
 
-from log_analyzer.analyzer import LogAnalyzer, AnalysisResult
+from log_analyzer.analyzer import AnalysisResult, LogAnalyzer
 from log_analyzer.parsers import UniversalFallbackParser
-
 
 # ---------------------------------------------------------------------------
 # Fixtures — temporary log files
@@ -208,7 +207,7 @@ class TestFormatDetection:
             path = f.name
         try:
             analyzer = LogAnalyzer()
-            parser = analyzer.detect_format(path)
+            analyzer.detect_format(path)
             # May return None for unrecognizable content
             # (depends on parsers)
         finally:

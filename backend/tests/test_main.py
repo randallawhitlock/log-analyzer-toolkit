@@ -7,9 +7,11 @@ rate limiter wiring, OpenAPI docs, and redoc.
 
 from fastapi.testclient import TestClient
 
+from backend.config import get_settings
 from backend.main import app
 
 client = TestClient(app)
+_VERSION = get_settings().app_version
 
 
 # ==================== Root & Health Endpoints ====================
@@ -23,7 +25,7 @@ def test_root_endpoint():
     data = response.json()
     assert "message" in data
     assert "version" in data
-    assert data["version"] == "1.0.1"
+    assert data["version"] == _VERSION
     assert "/docs" in data["docs"]
     assert "/health" in data["health"]
 
@@ -35,7 +37,7 @@ def test_health_check():
     assert response.status_code == 200
     data = response.json()
     assert data["status"] == "healthy"
-    assert data["version"] == "1.0.1"
+    assert data["version"] == _VERSION
     assert "timestamp" in data
 
 
