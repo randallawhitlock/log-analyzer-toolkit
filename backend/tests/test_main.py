@@ -7,11 +7,11 @@ rate limiter wiring, OpenAPI docs, and redoc.
 
 from fastapi.testclient import TestClient
 
-from backend.config import get_settings
+from backend.config import settings
 from backend.main import app
 
 client = TestClient(app)
-_VERSION = get_settings().app_version
+_VERSION = settings.app_version
 
 
 # ==================== Root & Health Endpoints ====================
